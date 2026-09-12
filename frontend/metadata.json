@@ -1,0 +1,6 @@
+{
+  "name": "BilimGo",
+  "description": "Telegram Mini App for BilimGo adaptive online learning platform with video lessons, live classes, chat, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

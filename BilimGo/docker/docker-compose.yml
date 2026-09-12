@@ -1,0 +1,52 @@
+x-common: &common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  env_file:
+    - ../.env
+  volumes:
+    - bilimgo_data:/app/data
+  restart: unless-stopped
+  networks:
+    - bilimgo_net
+
+services:
+  bot:
+    <<: *common
+    container_name: bilimgo_bot
+    command: python -m bot.main
+
+  web:
+    <<: *common
+    container_name: bilimgo_web
+    command: uvicorn web.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - RELAY_INTERNAL_URL=http://userbot:8081
+    depends_on:
+      - userbot
+
+  userbot:
+    <<: *common
+    container_name: bilimgo_userbot
+    command: python -m userbot.main
+    expose:
+      - "8081"
+
+  ai_worker:
+    <<: *common
+    container_name: bilimgo_ai_worker
+    command: python -m workers.ai_evaluation_worker
+
+  engagement_worker:
+    <<: *common
+    container_name: bilimgo_engagement_worker
+    command: python -m workers.engagement_monitor_worker
+
+volumes:
+  bilimgo_data:
+
+networks:
+  bilimgo_net:
+    driver: bridge

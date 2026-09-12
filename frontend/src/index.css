@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: 'SF Pro Rounded', 'Nunito', 'Quicksand', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --tg-theme-bg-color: #ffffff;
+  --tg-theme-secondary-bg-color: #f4f4f5;
+  --tg-theme-text-color: #09090b;
+  --tg-theme-hint-color: #71717a;
+  --tg-theme-link-color: #2563eb;
+  --tg-theme-button-color: #2563eb;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-accent-text-color: #2563eb;
+  --tg-theme-section-bg-color: #ffffff;
+  --tg-theme-section-header-text-color: #71717a;
+  --tg-theme-subtitle-text-color: #71717a;
+  --tg-theme-destructive-text-color: #ef4444;
+  --tg-theme-header-bg-color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tg-theme-bg-color: #09090b;
+    --tg-theme-secondary-bg-color: #18181b;
+    --tg-theme-text-color: #f4f4f5;
+    --tg-theme-hint-color: #a1a1aa;
+    --tg-theme-link-color: #38bdf8;
+    --tg-theme-button-color: #2563eb;
+    --tg-theme-button-text-color: #ffffff;
+    --tg-theme-accent-text-color: #38bdf8;
+    --tg-theme-section-bg-color: #18181b;
+    --tg-theme-section-header-text-color: #a1a1aa;
+    --tg-theme-subtitle-text-color: #a1a1aa;
+    --tg-theme-destructive-text-color: #f87171;
+    --tg-theme-header-bg-color: #09090b;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Telegram Emoji Crisp Rendering */
+.emoji-font, .tg-emoji {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', 'Android Emoji', emoji, sans-serif;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1.25;
+  display: inline-block;
+  vertical-align: -0.1em;
+}
+
+/* Telegram theme utility classes */
+.bg-tg-bg { background-color: var(--tg-theme-bg-color); }
+.bg-tg-secondary { background-color: var(--tg-theme-secondary-bg-color); }
+.bg-tg-section { background-color: var(--tg-theme-section-bg-color); }
+.bg-tg-btn { background-color: var(--tg-theme-button-color); }
+.text-tg-text { color: var(--tg-theme-text-color); }
+.text-tg-hint { color: var(--tg-theme-hint-color); }
+.text-tg-link { color: var(--tg-theme-link-color); }
+.text-tg-btn { color: var(--tg-theme-button-text-color); }
+.text-tg-accent { color: var(--tg-theme-accent-text-color); }
+.border-tg-secondary { border-color: var(--tg-theme-secondary-bg-color); }
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--tg-theme-hint-color);
+  opacity: 0.3;
+  border-radius: 9999px;
+}
+
+/* Animations */
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.animate-pulse-subtle {
+  animation: pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

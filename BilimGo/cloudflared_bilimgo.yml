@@ -1,0 +1,11 @@
+tunnel: 1eb25b91-be62-4efa-9507-b1f6614ee62d
+credentials-file: C:\Users\Acer\.cloudflared\1eb25b91-be62-4efa-9507-b1f6614ee62d.json
+
+ingress:
+  - hostname: instagram.smart-tools.uk
+    service: http://127.0.0.1:8080
+  - hostname: bilimgo.smart-tools.uk
+    service: http://127.0.0.1:8000
+  - hostname: smart-tools.uk
+    service: http://127.0.0.1:8000
+  - service: http_status:404
