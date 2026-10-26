@@ -1382,3 +1382,155 @@ export async function fetchMyMentorApplication(): Promise<MyMentorApplicationRes
   );
 }
 
+// ==========================================
+// 22. LESSON QUIZZES (Dars testlari)
+// ==========================================
+
+export interface MentorCardInfo {
+  has_card: boolean;
+  provider?: string;
+  card_number_masked?: string;
+  card_expire?: string;
+  created_at?: string;
+}
+
+export interface CardBindInitiateResponse {
+  status: string;
+  card_token: string;
+  provider?: string;
+  message?: string;
+}
+
+export interface CardBindVerifyResponse {
+  status: string;
+  message: string;
+  card_number?: string;
+}
+
+export async function fetchMyCard(): Promise<MentorCardInfo> {
+  return request<MentorCardInfo>(
+    '/api/cards/my-card',
+    { method: 'GET' },
+    () => ({ has_card: false })
+  );
+}
+
+export async function initiateCardBind(payload: {
+  provider: 'click' | 'payme';
+  card_number: string;
+  card_expire: string;
+}): Promise<CardBindInitiateResponse> {
+  return request<CardBindInitiateResponse>(
+    '/api/cards/bind/initiate',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function verifyCardBind(payload: {
+  provider: 'click' | 'payme';
+  card_token: string;
+  code: string;
+  card_number_masked?: string;
+  card_expire?: string;
+}): Promise<CardBindVerifyResponse> {
+  return request<CardBindVerifyResponse>(
+    '/api/cards/bind/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function unbindCard(): Promise<{ status: string; message: string }> {
+  return request<{ status: string; message: string }>(
+    '/api/cards/unbind',
+    { method: 'POST' }
+  );
+}
+
+export interface AdminOverviewStats {
+  total_users: number;
+  active_mentors: number;
+  active_courses: number;
+  total_sales_count: number;
+  total_revenue: number;
+  total_cabinets: number;
+  total_views: number;
+}
+
+export async function fetchAdminOverview(): Promise<AdminOverviewStats> {
+  return request<AdminOverviewStats>(
+    '/api/analytics/overview',
+    { method: 'GET' },
+    () => ({
+      total_users: 0,
+      active_mentors: 0,
+      active_courses: 0,
+      total_sales_count: 0,
+      total_revenue: 0,
+      total_cabinets: 0,
+      total_views: 0,
+    })
+  );
+}
+
+export interface LessonQuiz {
+  id: number;
+  lesson_id: number;
+  question: string;
+  options: string[];
+}
+
+export interface QuizSubmitResult {
+  quiz_id: number;
+  is_correct: boolean;
+  correct_option_index: number;
+  explanation: string;
+  lesson_passed?: boolean;
+}
+
+export interface LessonQuizStatus {
+  lesson_id: number;
+  total_quizzes: number;
+  passed_quizzes?: number;
+  passed: boolean;
+  has_quizzes?: boolean;
+  attempts_count: number;
+}
+
+export async function fetchLessonQuizzes(lessonId: string | number): Promise<LessonQuiz[]> {
+  const cleanId = cleanNumericId(lessonId);
+  return request<LessonQuiz[]>(
+    `/api/quizzes/lesson/${cleanId}`,
+    { method: 'GET' },
+    () => []
+  );
+}
+
+export async function submitQuizAnswer(
+  quizId: number,
+  selectedOptionIndex: number
+): Promise<QuizSubmitResult> {
+  return request<QuizSubmitResult>(
+    `/api/quizzes/${quizId}/submit`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ selected_option_index: selectedOptionIndex }),
+    }
+  );
+}
+
+export async function fetchLessonQuizStatus(
+  lessonId: string | number
+): Promise<LessonQuizStatus> {
+  const cleanId = cleanNumericId(lessonId);
+  return request<LessonQuizStatus>(
+    `/api/quizzes/lesson/${cleanId}/status`,
+    { method: 'GET' },
+    () => ({ lesson_id: Number(cleanId), total_quizzes: 0, passed: true, attempts_count: 0 })
+  );
+}

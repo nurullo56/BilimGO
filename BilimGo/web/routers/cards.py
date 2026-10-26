@@ -181,3 +181,16 @@ async def verify_card_bind(
         "message": "Karta avto-to'lov uchun muvaffaqiyatli ulandi!",
         "card_number": saved_card.card_number_masked,
     }
+
+
+@router.post("/unbind")
+async def unbind_card(telegram_id: int = Depends(get_current_telegram_id)) -> dict:
+    """Uланган kartani mentor hisobidan uzish (faolsizlantirish)."""
+    conn = database.conn
+    user = await UserRepository(conn).get_or_create(telegram_id=telegram_id)
+    card_repo = MentorCardRepository(conn)
+    card = await card_repo.get_active_card(user.id)
+    if card:
+        await card_repo.deactivate_card(card.id)
+        return {"status": "success", "message": "Karta muvaffaqiyatli uzildi"}
+    return {"status": "not_found", "message": "Ulangan faol karta topilmadi"}

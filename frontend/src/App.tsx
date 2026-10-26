@@ -18,6 +18,7 @@ import { LiveSessionsView } from './components/LiveSessionsView';
 import { LiveStreamView } from './components/LiveStreamView';
 import { MentorStatsView } from './components/MentorStatsView';
 import { ProfileView } from './components/ProfileView';
+import { AdminDashboardView } from './components/AdminDashboardView';
 import { ApiSettingsModal } from './components/ApiSettingsModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { ContentProtection } from './components/ContentProtection';
@@ -65,7 +66,9 @@ export default function App() {
 
     const handleBackClick = () => {
       triggerHaptic('light');
-      if (currentView.type === 'lesson') {
+      if (currentView.type === 'admin-dashboard') {
+        setCurrentView({ type: 'profile' });
+      } else if (currentView.type === 'lesson') {
         setCurrentView({ type: 'course', courseId: currentView.courseId });
       } else if (currentView.type === 'live' || currentView.type === 'live-stream') {
         setCurrentView({ type: 'course', courseId: currentView.courseId });
@@ -93,7 +96,9 @@ export default function App() {
   const handleNavigate = (view: AppView) => {
     setCurrentView(view);
     if (typeof window !== 'undefined') {
-      if (view.type === 'profile') {
+      if (view.type === 'admin-dashboard') {
+        window.location.hash = 'admin';
+      } else if (view.type === 'profile') {
         window.location.hash = 'profile';
       } else if (view.type === 'cabinet') {
         window.location.hash = view.cabinetId ? `cabinet-${view.cabinetId}` : 'cabinet';
@@ -207,6 +212,10 @@ export default function App() {
               mentorId={currentView.mentorId}
               onNavigate={handleNavigate}
             />
+          )}
+
+          {currentView.type === 'admin-dashboard' && (
+            <AdminDashboardView onNavigate={handleNavigate} />
           )}
 
           {currentView.type === 'profile' && (

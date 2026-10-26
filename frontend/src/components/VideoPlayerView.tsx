@@ -27,12 +27,15 @@ import {
   fetchCourseById,
   fetchCourseLessons,
   fetchLessonAccessToken,
+  fetchLessonQuizzes,
+  LessonQuiz,
   fetchUserProfile,
   getApiBaseUrl,
   updateLessonProgress,
 } from '../services/api';
 import { triggerHaptic, getTelegramUser } from '../services/telegram';
 import { LessonAiAssistant } from './LessonAiAssistant';
+import { LessonQuizCard } from './LessonQuizCard';
 import { TgText } from './TgEmoji';
 
 interface VideoPlayerViewProps {
@@ -61,6 +64,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const [duration, setDuration] = useState(0);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [quizzes, setQuizzes] = useState<LessonQuiz[]>([]);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +108,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
     setDuration(0);
     setProgressPercent(0);
     setIsCompleted(false);
+    setQuizzes([]);
     lastReportedTimeRef.current = 0;
 
     try {
@@ -123,6 +128,10 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
         setProgressPercent(target.completion_percent);
         setIsCompleted(target.completion_percent >= 90);
       }
+
+      fetchLessonQuizzes(lessonId)
+        .then((q) => setQuizzes(q || []))
+        .catch(() => setQuizzes([]));
 
       // Fetch Access Token & Media metadata
       const tokenRes = await fetchLessonAccessToken(lessonId);
@@ -852,6 +861,25 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Lesson Quizzes Section */}
+      {quizzes.length > 0 && (
+        <div className="space-y-3">
+          {quizzes.map((q) => (
+            <LessonQuizCard
+              key={q.id}
+              quizId={q.id}
+              question={q.question}
+              options={q.options}
+              onComplete={(isCorrect) => {
+                if (isCorrect) {
+                  reportProgress(100, 100, true);
+                }
+              }}
+            />
+          ))}
         </div>
       )}
 

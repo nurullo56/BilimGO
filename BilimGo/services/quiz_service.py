@@ -24,6 +24,7 @@ class QuizService:
         if not quiz:
             raise ValueError(f"Quiz topilmadi: {quiz_id}")
 
+        lesson_id = quiz.get("lesson_id")
         correct_idx = quiz["correct_option_index"]
         is_correct = (selected_option_index == correct_idx)
 
@@ -32,25 +33,47 @@ class QuizService:
             quiz_id=quiz_id,
             selected_option_index=selected_option_index,
             is_correct=is_correct,
+            lesson_id=lesson_id,
         )
+
+        status = await self.get_lesson_status(user_id, lesson_id)
 
         return {
             "quiz_id": quiz_id,
             "is_correct": is_correct,
             "correct_option_index": correct_idx,
             "explanation": quiz.get("explanation") or "",
+            "lesson_passed": status.get("passed", False),
         }
 
     async def get_lesson_status(self, user_id: int, lesson_id: int) -> dict[str, Any]:
         quizzes = await self.repo.get_by_lesson_id(lesson_id)
+        if not quizzes:
+            return {
+                "lesson_id": lesson_id,
+                "total_quizzes": 0,
+                "passed_quizzes": 0,
+                "passed": True,
+                "has_quizzes": False,
+                "attempts_count": 0,
+            }
+
         attempts = await self.repo.get_user_attempts_for_lesson(user_id, lesson_id)
-        
-        total_quizzes = len(quizzes)
-        correct_count = sum(1 for a in attempts if a["is_correct"])
-        
+        passed_quiz_ids = {a["quiz_id"] for a in attempts if a.get("is_correct")}
+        all_quiz_ids = {q["id"] for q in quizzes}
+        all_passed = all_quiz_ids.issubset(passed_quiz_ids)
+
+        if all_passed and user_id:
+            try:
+                await self.repo.mark_lesson_completed(user_id, lesson_id)
+            except Exception as exc:
+                logger.warning("Lesson completion belgilashda xatolik: %s", exc)
+
         return {
             "lesson_id": lesson_id,
-            "total_quizzes": total_quizzes,
-            "passed": (correct_count >= total_quizzes) if total_quizzes > 0 else True,
+            "total_quizzes": len(quizzes),
+            "passed_quizzes": len(passed_quiz_ids),
+            "passed": all_passed,
+            "has_quizzes": True,
             "attempts_count": len(attempts),
         }

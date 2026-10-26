@@ -39,7 +39,11 @@ import {
   fetchMyMentorApplication,
   MyMentorApplicationResponse,
   fetchCourses,
+  fetchMyCard,
+  unbindCard,
+  MentorCardInfo,
 } from '../services/api';
+import { CardBindingModal } from './CardBindingModal';
 import { triggerHaptic, getTelegramUser } from '../services/telegram';
 
 interface ProfileViewProps {
@@ -64,6 +68,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
     phone: '',
     username: '',
   });
+
+  // Mentor Card State
+  const [cardInfo, setCardInfo] = useState<MentorCardInfo | null>(null);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [unbindingCard, setUnbindingCard] = useState(false);
 
   // Mentor Application State
   const [showMentorModal, setShowMentorModal] = useState(false);
@@ -110,10 +119,41 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
       } catch (err) {
         console.warn('Mentor arizasini tekshirishda xatolik', err);
       }
+
+      await loadCard();
     } catch (e) {
       console.error('Failed to load user profile', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCard = async () => {
+    try {
+      const res = await fetchMyCard();
+      if (res && res.has_card) {
+        setCardInfo(res);
+      } else {
+        setCardInfo(null);
+      }
+    } catch (e) {
+      console.warn('Karta yuklashda xatolik', e);
+    }
+  };
+
+  const handleUnbindCard = async () => {
+    if (!window.confirm('Haqiqatan ham ulangan kartani uzmoqchimisiz?')) return;
+    triggerHaptic('medium');
+    setUnbindingCard(true);
+    try {
+      await unbindCard();
+      setCardInfo(null);
+      triggerHaptic('success');
+    } catch (e: any) {
+      alert(e.message || 'Kartani uzishda xatolik yuz berdi');
+      triggerHaptic('error');
+    } finally {
+      setUnbindingCard(false);
     }
   };
 
@@ -316,6 +356,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
           <Check className="w-4 h-4" />
           <span>Profil ma'lumotlari muvaffaqiyatli saqlandi!</span>
         </div>
+      )}
+
+            {/* Super Admin Quick Access Banner */}
+      {(profile.role === 'admin' || profile.is_admin) && (
+        <button
+          onClick={() => {
+            triggerHaptic('selection');
+            onNavigate({ type: 'admin-dashboard' });
+          }}
+          className="w-full flex items-center justify-between p-4 rounded-3xl bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 border border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-xs transition active:scale-[0.99] cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center text-xl shrink-0">
+              👑
+            </div>
+            <div className="text-left">
+              <p className="text-xs sm:text-sm font-bold text-tg-text flex items-center gap-1.5">
+                <span>Admin Boshqaruv Markazi</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-extrabold uppercase">
+                  Super Admin
+                </span>
+              </p>
+              <p className="text-[11px] text-tg-hint">
+                Umumiy daromad, foydalanuvchilar va platforma statistikasi
+              </p>
+            </div>
+          </div>
+          <span className="text-amber-500 font-bold text-sm">➔</span>
+        </button>
       )}
 
       {/* ======================================================== */}
@@ -695,6 +764,71 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
             <span>Ariza topshirish</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 5.1 AVTO-TO'LOV KARTASI (MENTOR / SUPER MENTOR)        */}
+      {/* ======================================================== */}
+      {(isApprovedMentor || profile.role === 'mentor' || profile.role === 'super_mentor' || profile.role === 'admin') && (
+        <div className="bg-tg-section border border-tg-secondary rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-tg-text">Avtomatik To'lov Kartasi</h4>
+                <p className="text-[11px] text-tg-hint">Mentorlik tarifi uchun avto-debit</p>
+              </div>
+            </div>
+            {cardInfo?.has_card && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                Faol
+              </span>
+            )}
+          </div>
+
+          {cardInfo?.has_card ? (
+            <div className="bg-tg-secondary/40 border border-tg-secondary rounded-2xl p-3.5 flex items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-sm text-tg-text tracking-wider">
+                    {cardInfo.card_number_masked || '**** **** **** ****'}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                    {cardInfo.provider || 'uzcard/humo'}
+                  </span>
+                </div>
+                {cardInfo.card_expire && (
+                  <p className="text-[11px] text-tg-hint font-mono">Muddat: {cardInfo.card_expire}</p>
+                )}
+              </div>
+
+              <button
+                onClick={handleUnbindCard}
+                disabled={unbindingCard}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {unbindingCard ? 'Uzilmoqda...' : 'Kartani uzish'}
+              </button>
+            </div>
+          ) : (
+            <div className="bg-tg-secondary/30 border border-dashed border-tg-secondary rounded-2xl p-3.5 flex items-center justify-between gap-3">
+              <p className="text-xs text-tg-hint">
+                Oylik tarif uchun karta ulanmagan. Kartangizni ulab, avtomatik to'lovni yoqing.
+              </p>
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setShowCardModal(true);
+                }}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold shrink-0 shadow-xs transition-all cursor-pointer"
+              >
+                ➕ Karta ulash
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1165,6 +1299,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
           </div>
         </div>
       )}
+      {/* Card Binding Modal */}
+      <CardBindingModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        onSuccess={() => {
+          loadCard();
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 3000);
+        }}
+      />
     </div>
   );
 };

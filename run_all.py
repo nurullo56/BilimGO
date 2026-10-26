@@ -19,6 +19,8 @@ procs = {
     "web": None,
     "tunnel": None,
     "bot": None,
+    "ai_worker": None,
+    "engagement_worker": None,
 }
 
 running = True
@@ -73,6 +75,18 @@ def start_service(name):
             [sys.executable, "-m", "bot.main"],
             cwd=bilimgo_dir,
         )
+    elif name == "ai_worker":
+        print("4. 🧠 AI Baholash Workeri ishga tushmoqda (ai_evaluation_worker)...")
+        return subprocess.Popen(
+            [sys.executable, "-m", "workers.ai_evaluation_worker"],
+            cwd=bilimgo_dir,
+        )
+    elif name == "engagement_worker":
+        print("5. ⏰ Talabalar Eslatma Workeri ishga tushmoqda (engagement_monitor_worker)...")
+        return subprocess.Popen(
+            [sys.executable, "-m", "workers.engagement_monitor_worker"],
+            cwd=bilimgo_dir,
+        )
     return None
 
 
@@ -80,7 +94,7 @@ def start_all():
     print("\n==================================================")
     print("🚀 BilimGo barcha xizmatlari ishga tushirilmoqda...")
     print("==================================================")
-    for name in ("web", "tunnel", "bot"):
+    for name in ("web", "tunnel", "bot", "ai_worker", "engagement_worker"):
         procs[name] = start_service(name)
         time.sleep(1)
     print("\n✅ Barcha xizmatlar muvaffaqiyatli ishga tushirildi!")

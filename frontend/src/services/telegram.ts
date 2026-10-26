@@ -266,6 +266,21 @@ export function parseRouteFromUrl(): AppView {
     return { type: 'my-courses' };
   }
 
+  // 4.1. ADMIN DASHBOARD
+  if (
+    viewParam === 'admin' ||
+    viewParam === 'admin-dashboard' ||
+    rawHash === 'admin' ||
+    rawHash === 'admin-dashboard' ||
+    pathname === '/admin' ||
+    pathname === '/admin-dashboard' ||
+    tgStartParam === 'admin' ||
+    tgStartParam === 'admin-dashboard' ||
+    combined.includes('admin')
+  ) {
+    return { type: 'admin-dashboard' };
+  }
+
   // 4. MENTOR STATS / ANALYTICS
   if (
     viewParam === 'mentor-stats' ||

@@ -178,4 +178,5 @@ export type AppView =
   | { type: 'live'; courseId: string | number }
   | { type: 'live-stream'; sessionId: string | number; courseId: string | number }
   | { type: 'mentor-stats'; cabinetId?: string | number; mentorId?: string | number }
+  | { type: 'admin-dashboard' }
   | { type: 'profile' };

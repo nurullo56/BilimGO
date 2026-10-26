@@ -22,6 +22,7 @@ from web.routers.live import router as live_router
 from web.routers.live_websocket import router as live_ws_router
 from web.routers.payments import router as payments_router
 from web.routers.player import router as player_router
+from web.routers.quiz import router as quiz_router
 from web.routers.server_expenses import router as server_expenses_router
 from web.routers.users import router as users_router
 
@@ -54,6 +55,7 @@ app.include_router(live_router)
 app.include_router(live_ws_router)
 app.include_router(analytics_router)
 app.include_router(ai_tutor_router)
+app.include_router(quiz_router)
 app.include_router(server_expenses_router)
 app.include_router(users_router)
 
