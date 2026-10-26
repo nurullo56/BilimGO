@@ -1,0 +1,140 @@
+# 🧠 Loyiha Xotirasi: BilimGo_TOLIQ
+
+> [!NOTE]
+> Ushbu fayl AGY (Antigravity) uchun loyihaning qisqacha kontekst xaritasidir. 
+> AGY har safar butun fayllarni qayta titkilamasdan, shu xaritalash orqali loyihani darhol tushunadi.
+
+## 📌 Umumiy Ma'lumot
+- **Loyiha nomi**: `BilimGo_TOLIQ`
+- **Loyiha turi**: General / Polyglot
+- **Ildiz yo'li**: `C:\Users\Acer\Downloads\BilimGo_TOLIQ`
+
+## 📁 Loyiha Tuzilmasi (Daraxt)
+- 📁 **BilimGo/**
+  - 📁 **bot/**
+    - 📁 **handlers/**
+      - 📁 **admin/**
+      - 📁 **common/**
+      - 📁 **mentor/**
+      - 📁 **student/**
+      - 📄 `__init__.py`
+    - 📁 **keyboards/**
+      - 📁 **admin/**
+      - 📁 **common/**
+      - 📁 **mentor/**
+      - 📁 **student/**
+      - 📄 `__init__.py`
+      - 📄 `admin_kb.py`
+      - 📄 `common_kb.py`
+      - 📄 `mentor_kb.py`
+      - 📄 `student_kb.py`
+    - 📁 **middlewares/**
+      - 📄 `__init__.py`
+      - 📄 `auth.py`
+    - 📁 **states/**
+      - 📄 `__init__.py`
+      - 📄 `fsm_states.py`
+    - 📄 `__init__.py`
+    - 📄 `main.py`
+  - 📁 **core/**
+    - 📄 `__init__.py`
+    - 📄 `cache.py`
+    - 📄 `config.py`
+    - 📄 `exceptions.py`
+  - 📁 **data/**
+    - 📄 `bilimgo.db`
+    - 📄 `bilimgo.db-shm`
+    - 📄 `bilimgo.db-wal`
+  - 📁 **db/**
+    - 📁 **migrations/**
+      - 📄 `0001_init_users.sql`
+      - 📄 `0002_license_nodes.sql`
+      - 📄 `0003_courses_lessons.sql`
+      - 📄 `0004_access_grants.sql`
+      - 📄 `0005_delivery_tokens.sql`
+      - 📄 `0006_sales_royalty.sql`
+      - 📄 `0007_cabinets_chat.sql`
+      - 📄 `0008_mentor_userbot_ai.sql`
+      - 📄 `0009_adaptive_unlock.sql`
+      - 📄 `0010_live_sessions.sql`
+      - 📄 `0011_lesson_views.sql`
+      - 📄 `0012_engagement_nudge.sql`
+      - 📄 `0013_completion_notifications.sql`
+      - 📄 `0014_mentor_cards_auto_debit.sql`
+      - 📄 `0015_tariff_quotas.sql`
+      - 📄 `0016_ai_agent_token_billing.sql`
+      - 📄 `0017_server_expense_billing.sql`
+      - 📄 `0018_live_sessions_enhanced.sql`
+      - 📄 `0019_course_tariffs.sql`
+      - 📄 `0020_mentor_application_payment.sql`
+      - 📄 `0021_lesson_quizzes.sql`
+    - 📁 **repositories/**
+      - 📄 `__init__.py`
+      - 📄 `access_grant_repo.py`
+      - 📄 `admin_repo.py`
+      - 📄 `ai_token_repo.py`
+      - 📄 `assessment_criteria_repo.py`
+      - 📄 `base.py`
+      - 📄 `broadcast_repo.py`
+      - 📄 `cabinet_repo.py`
+      - 📄 `chat_repo.py`
+      - 📄 `click_transaction_repo.py`
+      - 📄 `completion_notification_repo.py`
+      - 📄 `comprehension_check_repo.py`
+      - 📄 `course_repo.py`
+      - 📄 `course_tariff_repo.py`
+      - 📄 `daily_unlock_plan_repo.py`
+      - 📄 `delivery_token_repo.py`
+      - 📄 `engagement_repo.py`
+      - 📄 `lesson_repo.py`
+      - 📄 `lesson_view_repo.py`
+      - 📄 `license_node_repo.py`
+      - 📄 `live_session_repo.py`
+      - 📄 `mentor_application_repo.py`
+      - 📄 `mentor_card_repo.py`
+      - 📄 `mentor_userbot_repo.py`
+      - 📄 `payme_transaction_repo.py`
+      - 📄 `quiz_repo.py`
+      - 📄 `royalty_repo.py`
+      - 📄 `sale_repo.py`
+      - 📄 `server_expense_repo.py`
+      - 📄 `tariff_quota_repo.py`
+      - 📄 `unlock_tier_repo.py`
+      - 📄 `user_repo.py`
+    - 📄 `__init__.py`
+    - 📄 `database.py`
+  - 📁 **docker/**
+    - 📄 `docker-compose.yml`
+    - 📄 `Dockerfile`
+  - 📁 **services/**
+    - 📄 `__init__.py`
+    - 📄 `access_control_service.py`
+    - 📄 `adaptive_unlock_service.py`
+    - 📄 `admin_notifier.py`
+    - 📄 `ai_evaluation_service.py`
+    - 📄 `ai_tutor_service.py`
+    - 📄 `analytics_service.py`
+    - 📄 `auto_debit_service.py`
+    - 📄 `broadcast_service.py`
+    - 📄 `cabinet_service.py`
+    - 📄 `click_service.py`
+    - 📄 `cohort_service.py`
+    - 📄 `course_service.py`
+    - 📄 `delivery_token_service.py`
+    - 📄 `engagement_monitor_service.py`
+    - 📄 `lesson_completion_service.py`
+    - 📄 `live_session_service.py`
+    - 📄 `live_stream_service.py`
+    - 📄 `messaging_service.py`
+    - 📄 `payme_service.py`
+    - 📄 `payment_service.py`
+    - 📄 `quiz_service.py`
+    - 📄 `royalty_service.py`
+
+## ⚙️ Asosiy Modullar va Vazifalari
+<!-- Har bir asosiy fayl yoki modulning vazifasi haqida qisqacha izoh -->
+- `(Loyihadagi asosiy fayllar haqida qisqa izohlar shu yerga yoziladi)`
+
+## 🎯 Joriy Holat va Qoidalar
+- Kod yozishda to'g'ri UTF-8 va Unicode emojilardan (📦, 🤖, 🎯, 💾, 🛑, ✅) foydalaning.
+- Mojibake yoki buzuq harflar yozish qat'iyan taqiqlanadi.

@@ -61,23 +61,6 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
 
   return (
     <div className="space-y-5 pb-24 animate-in fade-in duration-200 max-w-3xl mx-auto px-4 pt-2">
-      {/* Daily adaptive learning badge */}
-      <div className="relative overflow-hidden p-4 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg">
-        <div className="relative z-10 space-y-1">
-          <div className="flex items-center gap-1.5 text-blue-200 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Adaptiv O'quv Rejimi</span>
-          </div>
-          <h2 className="text-base sm:text-lg font-extrabold tracking-tight">
-            Kunlik darslar chegarasi faol
-          </h2>
-          <p className="text-xs text-blue-100/90 leading-relaxed max-w-lg">
-            Backend tomonidan hisoblangan kunlik bilim chegarangiz asosida darslar bosqichma-bosqich ochiladi.
-          </p>
-        </div>
-        <div className="absolute -right-6 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
-      </div>
-
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-tg-hint" />

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -318,3 +319,285 @@ async def list_mentors() -> list[dict]:
             }
         ]
     return results
+
+
+class MentorApplicationCreate(BaseModel):
+    full_name: str
+    phone: str
+    course_direction: str
+    experience_bio: str
+    telegram_username: str | None = None
+
+
+class MentorReceiptSubmit(BaseModel):
+    application_id: int
+    receipt_photo_id: str
+
+
+@router.post("/users/mentor-application")
+@router.post("/mentor-application")
+async def create_mentor_application(
+    payload: MentorApplicationCreate,
+    telegram_id: int = Depends(get_current_telegram_id),
+) -> dict:
+    conn = database.conn
+    user_repo = UserRepository(conn)
+    user = await user_repo.get_or_create(telegram_id=telegram_id)
+
+    from db.repositories.mentor_application_repo import MentorApplicationRepository
+    app_repo = MentorApplicationRepository(conn)
+    app_id = await app_repo.create(
+        user_id=user.id,
+        full_name=payload.full_name,
+        phone=payload.phone,
+        course_direction=payload.course_direction,
+        experience_bio=payload.experience_bio,
+        telegram_username=payload.telegram_username,
+    )
+
+    # 🔔 O'zbekcha sana/vaqt formati
+    months_map = {
+        1: "yanvar", 2: "fevral", 3: "mart", 4: "aprel",
+        5: "may", 6: "iyun", 7: "iyul", 8: "avgust",
+        9: "sentabr", 10: "oktabr", 11: "noyabr", 12: "dekabr"
+    }
+    def _format_uzbek_dt(raw_dt: str | None = None) -> str:
+        from datetime import datetime
+        if not raw_dt:
+            now = datetime.now()
+            return f"{now.day}-{months_map.get(now.month, '')} {now.year}-yil, {now.strftime('%H:%M')}"
+        try:
+            clean_str = raw_dt.replace("T", " ")[:19]
+            dt = datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
+            return f"{dt.day}-{months_map.get(dt.month, '')} {dt.year}-yil, {dt.strftime('%H:%M')}"
+        except Exception:
+            return raw_dt[:16] if raw_dt else "Noma'lum"
+
+    # Biriktirilgan mentor va kabinetni aniqlash
+    cursor = await conn.execute(
+        """
+        SELECT 
+            cab.display_name as cabinet_name,
+            mentor_user.full_name as mentor_name,
+            mentor_user.telegram_id as mentor_tg_id
+        FROM cabinet_members cm
+        JOIN cabinets cab ON cab.id = cm.cabinet_id
+        JOIN license_nodes ln ON ln.id = cab.owner_node_id
+        JOIN users mentor_user ON mentor_user.id = ln.owner_user_id
+        WHERE cm.user_id = ?
+        LIMIT 1
+        """,
+        (user.id,),
+    )
+    mentor_row = await cursor.fetchone()
+    if mentor_row:
+        mentor_display = f"{mentor_row['mentor_name']} (ID: <code>{mentor_row['mentor_tg_id']}</code>)"
+        cabinet_display = mentor_row["cabinet_name"]
+    else:
+        mentor_display = "To'g'ridan-to'g'ri (Platforma)"
+        cabinet_display = "Hali biriktirilmagan"
+
+    # O'qiyotgan faol kursni aniqlash
+    c_cursor = await conn.execute(
+        """
+        SELECT c.title
+        FROM access_grants ag
+        JOIN courses c ON c.id = ag.course_id
+        WHERE ag.user_id = ? AND ag.status = 'active'
+        ORDER BY ag.id DESC
+        LIMIT 1
+        """,
+        (user.id,),
+    )
+    course_row = await c_cursor.fetchone()
+    enrolled_course_display = course_row["title"] if course_row else "Hozircha kurs yo'q"
+
+    registered_time_display = _format_uzbek_dt(user.created_at)
+    submission_time_display = _format_uzbek_dt()
+
+    # 🔔 Adminga / guruhga boyitilgan xabarnoma matni
+    tg_user_link = f"@{payload.telegram_username.lstrip('@')}" if payload.telegram_username else f"ID: {user.telegram_id}"
+    admin_notify_text = (
+        f"👨‍🏫 <b>YANGI MENTORLIK ARIZASI!</b>\n\n"
+        f"🆔 <b>Ariza raqami:</b> #{app_id}\n"
+        f"👤 <b>F.I.SH:</b> <b>{payload.full_name}</b>\n"
+        f"📱 <b>Telefon:</b> <code>{payload.phone}</code>\n"
+        f"💬 <b>Telegram:</b> {tg_user_link} (<code>{user.telegram_id}</code>)\n\n"
+        f"🎯 <b>Ariza yo'nalishi:</b> {payload.course_direction}\n"
+        f"📝 <b>Tajriba / Ma'lumot:</b>\n<i>{payload.experience_bio}</i>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>PLATFORMA MA'LUMOTLARI:</b>\n"
+        f"📅 <b>Platformaga a'zo bo'lgan:</b> {registered_time_display}\n"
+        f"👑 <b>Biriktirilgan Mentori:</b> {mentor_display}\n"
+        f"👥 <b>Biriktirilgan Guruhi:</b> {cabinet_display}\n"
+        f"📚 <b>O'qiyotgan kursi:</b> {enrolled_course_display}\n\n"
+        f"⏰ <b>Ariza berilgan vaqt:</b> {submission_time_display}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡️ <i>Iltimos, arizani ko'rib chiqing va tasdiqlang.</i>"
+    )
+
+    async def _send_admin_alerts():
+        bot_token = settings.bot.token
+        if not bot_token:
+            return
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # SuperMentor guruhidagi '🎓Mentorlik arizalari' mavzusiga (Topic 2) xabarnoma
+            group_id = int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
+            topic_id = int(os.getenv("MENTOR_APPLICATIONS_TOPIC_ID", "2"))
+            if group_id:
+                try:
+                    payload_data = {
+                        "chat_id": group_id,
+                        "text": admin_notify_text,
+                        "parse_mode": "HTML",
+                    }
+                    if topic_id:
+                        payload_data["message_thread_id"] = topic_id
+                    payload_data["reply_markup"] = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "✅ Tasdiqlash", "callback_data": f"mentor_app:approve:{app_id}"},
+                                {"text": "❌ Rad etish", "callback_data": f"mentor_app:reject:{app_id}"},
+                            ]
+                        ]
+                    }
+                    res = await client.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json=payload_data,
+                    )
+                    logger.info("Mentorlik arizasi guruhga (%s topic %s) yuborildi: %s", group_id, topic_id, res.status_code)
+                except Exception as ex:
+                    logger.warning("Guruhga xabar yuborishda xatolik: %s", ex)
+
+    import asyncio
+    asyncio.create_task(_send_admin_alerts())
+
+    return {
+        "success": True,
+        "message": "Arizangiz muvaffaqiyatli qabul qilindi!",
+        "application_id": app_id,
+    }
+
+
+@router.get("/users/mentor-application/my")
+@router.get("/mentor-application/my")
+async def get_my_mentor_application(
+    telegram_id: int = Depends(get_current_telegram_id),
+) -> dict:
+    conn = database.conn
+    user_repo = UserRepository(conn)
+    user = await user_repo.get_or_create(telegram_id=telegram_id)
+
+    from db.repositories.mentor_application_repo import MentorApplicationRepository
+    app_repo = MentorApplicationRepository(conn)
+    app = await app_repo.get_latest_by_user_id(user.id)
+    default_price = int(os.getenv("MENTOR_PRICE", "949000"))
+    card_number = os.getenv("MENTOR_CARD_NUMBER", "8600 0000 0000 0000")
+    card_holder = os.getenv("MENTOR_CARD_HOLDER", "Admin")
+
+    if not app:
+        return {
+            "application": None,
+            "payment_amount": default_price,
+            "admin_card_number": card_number,
+            "admin_card_holder": card_holder,
+        }
+
+    app_data = {
+        "id": app.id,
+        "full_name": app.full_name,
+        "phone": app.phone,
+        "telegram_username": app.telegram_username,
+        "course_direction": app.course_direction,
+        "experience_bio": app.experience_bio,
+        "status": app.status,
+        "payment_amount": app.payment_amount or default_price,
+        "receipt_photo_id": app.receipt_photo_id,
+        "created_at": app.created_at,
+        "admin_card_number": card_number,
+        "admin_card_holder": card_holder,
+    }
+    return {
+        "application": app_data,
+        **app_data,
+    }
+
+
+@router.post("/users/mentor-application/receipt")
+@router.post("/mentor-application/receipt")
+async def submit_mentor_application_receipt(
+    payload: MentorReceiptSubmit,
+    telegram_id: int = Depends(get_current_telegram_id),
+) -> dict:
+    conn = database.conn
+    user_repo = UserRepository(conn)
+    user = await user_repo.get_or_create(telegram_id=telegram_id)
+
+    from db.repositories.mentor_application_repo import MentorApplicationRepository
+    app_repo = MentorApplicationRepository(conn)
+    app = await app_repo.get_by_id(payload.application_id)
+    if not app or app.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Ariza topilmadi")
+
+    await conn.execute(
+        """
+        UPDATE mentor_applications
+        SET receipt_photo_id = ?, status = 'receipt_submitted'
+        WHERE id = ?
+        """,
+        (payload.receipt_photo_id, payload.application_id),
+    )
+    await conn.commit()
+
+    # 🧾 Adminga chek xabarnomasini yuborish
+    receipt_notify_text = (
+        f"🧾 <b>MENTORLIK TO'LOV CHEKI YUBORILDI!</b>\n\n"
+        f"🆔 <b>Ariza raqami:</b> #{payload.application_id}\n"
+        f"👤 <b>Nomzod:</b> <b>{app.full_name}</b>\n"
+        f"📱 <b>Telefon:</b> <code>{app.phone}</code>\n"
+        f"💬 <b>Telegram:</b> {app.telegram_username or f'ID: {user.telegram_id}'}\n"
+        f"💰 <b>To'lov summasi:</b> {app.payment_amount:,} so'm\n"
+        f"🖼 <b>Chek fayl ID:</b> <code>{payload.receipt_photo_id}</code>\n\n"
+        f"⚡️ <i>Iltimos, to'lovni tekshirib arizani tasdiqlang.</i>"
+    )
+
+    async def _send_receipt_alerts():
+        bot_token = settings.bot.token
+        if not bot_token:
+            return
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # SuperMentor guruhidagi '💳To‘lovlar va cheklar' mavzusiga (Topic 4) xabarnoma
+            group_id = int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
+            topic_id = int(os.getenv("PAYMENT_RECEIPTS_TOPIC_ID", "4"))
+            if group_id:
+                try:
+                    payload_data = {
+                        "chat_id": group_id,
+                        "text": receipt_notify_text,
+                        "parse_mode": "HTML",
+                    }
+                    if topic_id:
+                        payload_data["message_thread_id"] = topic_id
+                    payload_data["reply_markup"] = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "✅ Chekni tasdiqlash", "callback_data": f"mentor_receipt:approve:{payload.application_id}"},
+                                {"text": "❌ Rad etish", "callback_data": f"mentor_receipt:reject:{payload.application_id}"},
+                            ]
+                        ]
+                    }
+                    res = await client.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json=payload_data,
+                    )
+                    logger.info("To'lov cheki guruhga (%s topic %s) yuborildi: %s", group_id, topic_id, res.status_code)
+                except Exception as ex:
+                    logger.warning("Guruhga chek xabarnomasini yuborishda xatolik: %s", ex)
+
+    import asyncio
+    asyncio.create_task(_send_receipt_alerts())
+
+    return {
+        "success": True,
+        "message": "Chek muvaffaqiyatli yuborildi!",
+    }

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Check, Globe, RefreshCw, Shield, X, AlertCircle } from 'lucide-react';
-import { getApiBaseUrl, setApiBaseUrl, getBackendStatus } from '../services/api';
-import { getTelegramInitData, triggerHaptic } from '../services/telegram';
+import React, { useState, useEffect } from 'react';
+import { Check, Globe, Moon, RefreshCw, Shield, Sun, X } from 'lucide-react';
+import { getApiBaseUrl, setApiBaseUrl, getBackendStatus, setMockFallback } from '../services/api';
+import { getTelegramInitData, triggerHaptic, applyTelegramTheme } from '../services/telegram';
 
 interface ApiSettingsModalProps {
   isOpen: boolean;
@@ -16,10 +16,34 @@ export const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({
 }) => {
   const [urlInput, setUrlInput] = useState(getApiBaseUrl());
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'auto'>('auto');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('bilimgo_theme') as 'light' | 'dark' | null;
+    if (saved) {
+      setCurrentTheme(saved);
+    } else {
+      setCurrentTheme('auto');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   const status = getBackendStatus();
   const initData = getTelegramInitData();
 
-  if (!isOpen) return null;
+  const handleSetTheme = (mode: 'light' | 'dark' | 'auto') => {
+    triggerHaptic('selection');
+    setCurrentTheme(mode);
+    if (mode === 'auto') {
+      localStorage.removeItem('bilimgo_theme');
+    } else if (mode === 'dark') {
+      localStorage.setItem('bilimgo_theme', 'dark');
+    } else {
+      localStorage.setItem('bilimgo_theme', 'light');
+    }
+    applyTelegramTheme();
+  };
 
   const handleSave = () => {
     triggerHaptic('success');
@@ -39,75 +63,126 @@ export const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-tg-bg border border-tg-secondary rounded-3xl p-6 shadow-2xl transition-all max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-3 border-b border-tg-secondary">
+      <div className="w-full max-w-md bg-white dark:bg-[#17212b] border border-slate-200 dark:border-[#243343] rounded-3xl p-5 shadow-2xl transition-all max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-[#243343]">
           <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="font-bold text-base text-tg-text">API & Backend Sozlamalari</h3>
+            <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-[#233447] text-[#2481cc] flex items-center justify-center">
+              <Globe className="w-4 h-4 stroke-[2.2]" />
+            </div>
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Platforma Sozlamalari
+            </h3>
           </div>
           <button
             onClick={() => {
               triggerHaptic('light');
               onClose();
             }}
-            className="p-1.5 rounded-full hover:bg-tg-secondary text-tg-hint hover:text-tg-text transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-[#1c2733] dark:hover:bg-[#253241] text-slate-600 dark:text-slate-300 flex items-center justify-center transition cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 stroke-[2.2]" />
           </button>
         </div>
 
         <div className="py-4 space-y-4 text-xs">
+          {/* Theme switcher (Tungi / Kunduzgi / Avto) */}
           <div>
-            <label className="font-bold text-tg-text block mb-1">
-              FastAPI Server URL (API_BASE):
+            <label className="font-bold text-slate-800 dark:text-slate-200 block mb-2">
+              Ko'rinish rejimi (Mavzu):
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSetTheme('light')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 font-semibold transition cursor-pointer ${
+                  currentTheme === 'light'
+                    ? 'bg-blue-50 border-[#2481cc] text-[#2481cc] dark:bg-blue-500/10'
+                    : 'bg-slate-50 dark:bg-[#1c2733] border-slate-200 dark:border-[#243343] text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                <span>Kunduzgi</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSetTheme('dark')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 font-semibold transition cursor-pointer ${
+                  currentTheme === 'dark'
+                    ? 'bg-blue-50 border-[#2481cc] text-[#2481cc] dark:bg-blue-500/10'
+                    : 'bg-slate-50 dark:bg-[#1c2733] border-slate-200 dark:border-[#243343] text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span>Tungi</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSetTheme('auto')}
+                className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-1.5 font-semibold transition cursor-pointer ${
+                  currentTheme === 'auto'
+                    ? 'bg-blue-50 border-[#2481cc] text-[#2481cc] dark:bg-blue-500/10'
+                    : 'bg-slate-50 dark:bg-[#1c2733] border-slate-200 dark:border-[#243343] text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <span>Avto (TG)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* FastAPI Server URL */}
+          <div>
+            <label className="font-bold text-slate-800 dark:text-slate-200 block mb-1">
+              Backend Server URL:
             </label>
             <input
               type="text"
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder="http://localhost:8000 yoki https://api.domain.uz"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-tg-secondary border border-tg-secondary text-tg-text font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-[#1c2733] border border-slate-200 dark:border-[#243343] text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-[#2481cc] text-xs"
             />
-            <p className="text-[11px] text-tg-hint mt-1">
-              Default qiymat: <code className="text-blue-600 dark:text-blue-400">http://localhost:8000</code>. Istalgan vaqtda o'zgartirishingiz mumkin.
-            </p>
           </div>
 
-          <div className="bg-tg-secondary p-3 rounded-2xl space-y-2 border border-tg-secondary">
-            <div className="flex items-center gap-2 font-bold text-tg-text">
+          {/* Telegram Auth status */}
+          <div className="bg-slate-50 dark:bg-[#1c2733] p-3 rounded-2xl space-y-2 border border-slate-200 dark:border-[#243343]">
+            <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
               <Shield className="w-4 h-4 text-emerald-500" />
               <span>Telegram Auth Holati:</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-tg-hint">X-Telegram-Init-Data:</span>
-              <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${
-                initData ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-              }`}>
+              <span className="text-slate-500 dark:text-slate-400">X-Telegram-Init-Data:</span>
+              <span
+                className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${
+                  initData
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                }`}
+              >
                 {initData ? 'Mavjud (Telegram WebApp)' : 'Lokal / Browser Dev'}
               </span>
             </div>
-            {initData && (
-              <div className="p-2 bg-tg-bg rounded-lg font-mono text-[10px] text-tg-hint truncate">
-                {initData.slice(0, 60)}...
-              </div>
-            )}
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-tg-secondary border border-tg-secondary">
+          {/* Mock toggle */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-[#1c2733] border border-slate-200 dark:border-[#243343]">
             <div>
-              <span className="font-bold text-tg-text block">Lokal / Demo rejim</span>
-              <span className="text-[11px] text-tg-hint">
-                Backend ulanmagan bo'lsa to'liq o'quv namunalarini ko'rsatish
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">Lokal / Demo rejim</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Backend ulanmagan bo'lsa lokal ma'lumotlar bilan ishlash
               </span>
             </div>
             <input
               type="checkbox"
               checked={status.useMockFallback}
               onChange={(e) => handleToggleMock(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded cursor-pointer accent-blue-600"
+              className="w-4 h-4 text-[#2481cc] rounded cursor-pointer accent-[#2481cc]"
             />
           </div>
 
+          {/* Actions */}
           <div className="flex gap-2 pt-2">
             <button
               onClick={() => {
@@ -122,14 +197,14 @@ export const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({
                   if (onRefresh) onRefresh();
                 }, 600);
               }}
-              className="px-3 py-2.5 rounded-xl bg-tg-secondary hover:bg-tg-secondary/80 text-tg-text font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-[11px]"
+              className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#243343] dark:hover:bg-[#2b3e52] text-slate-700 dark:text-slate-200 font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-[11px]"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Keshni tozalash</span>
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-[#2481cc] hover:bg-blue-600 text-white font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               {savedSuccess ? (
                 <>

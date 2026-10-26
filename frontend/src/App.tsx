@@ -19,12 +19,14 @@ import { LiveStreamView } from './components/LiveStreamView';
 import { MentorStatsView } from './components/MentorStatsView';
 import { ProfileView } from './components/ProfileView';
 import { ApiSettingsModal } from './components/ApiSettingsModal';
+import { NotificationsModal } from './components/NotificationsModal';
 import { ContentProtection } from './components/ContentProtection';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>(() => parseRouteFromUrl());
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   // Initialize Telegram WebApp on mount & handle deep link
@@ -138,6 +140,8 @@ export default function App() {
           onNavigate={handleNavigate}
           user={user}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          hasUnreadNotifications={true}
         />
 
         {/* Main View Router */}
@@ -217,17 +221,20 @@ export default function App() {
           unreadCount={0}
         />
 
-        {/* API Configuration & Testing Modal (Faqat DEV rejimida) */}
-        {import.meta.env.DEV && (
-          <ApiSettingsModal
-            isOpen={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            onRefresh={() => {
-              // Re-render current view if needed
-              setCurrentView({ ...currentView });
-            }}
-          />
-        )}
+        {/* Notifications Modal */}
+        <NotificationsModal
+          isOpen={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+        />
+
+        {/* Settings Modal (Theme, API, Cache) */}
+        <ApiSettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onRefresh={() => {
+            setCurrentView({ ...currentView });
+          }}
+        />
       </div>
     </ContentProtection>
   );

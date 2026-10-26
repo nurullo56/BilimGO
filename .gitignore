@@ -1,0 +1,66 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Archives & Backups
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.bak
+*.backup.*
+BilimGo_ALL_CODE.txt
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary / flags
+*.flag
+restart.flag
+
+# Temporary scratch/analysis scripts
+crop_nav.py
+sample_colors.py
+export_project_to_txt.py
+check_live.py
+folder_stats.py
+nav_*.png
+image copy*.png

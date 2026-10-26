@@ -9,7 +9,9 @@ from core.config import settings
 from db.database import database
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+import time
+import re
 
 from web.routers.admin_analytics import router as analytics_router
 from web.routers.ai_tutor import router as ai_tutor_router
@@ -83,10 +85,13 @@ async def serve_mini_app_spa(full_path: str = ""):
         raise HTTPException(status_code=404, detail="Not found")
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(
-            index_file,
+        content = index_file.read_text(encoding="utf-8")
+        now = str(int(time.time()))
+        content = re.sub(r'(/assets/[^"\'>]+\.(?:js|css))', rf'\1?v={now}', content)
+        return HTMLResponse(
+            content=content,
             headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
             },

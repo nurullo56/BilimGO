@@ -77,6 +77,7 @@ declare global {
 }
 
 export function initTelegramApp() {
+  applyTelegramTheme();
   if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
     try {
       window.Telegram.WebApp.ready();
@@ -85,18 +86,65 @@ export function initTelegramApp() {
         window.Telegram.WebApp.enableClosingConfirmation();
       }
       applyTelegramTheme();
+      if ((window.Telegram.WebApp as any).onEvent) {
+        (window.Telegram.WebApp as any).onEvent('themeChanged', applyTelegramTheme);
+      }
     } catch (e) {
       console.warn('Telegram WebApp init warning:', e);
     }
   }
 }
 
+function isHexColorDark(hex: string): boolean {
+  if (!hex) return false;
+  const clean = hex.replace('#', '').trim();
+  let r = 255, g = 255, b = 255;
+  if (clean.length === 3) {
+    r = parseInt(clean[0] + clean[0], 16);
+    g = parseInt(clean[1] + clean[1], 16);
+    b = parseInt(clean[2] + clean[2], 16);
+  } else if (clean.length === 6) {
+    r = parseInt(clean.substring(0, 2), 16);
+    g = parseInt(clean.substring(2, 4), 16);
+    b = parseInt(clean.substring(4, 6), 16);
+  } else {
+    return false;
+  }
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 128;
+}
+
 export function applyTelegramTheme() {
   if (typeof window === 'undefined') return;
-  const theme = window.Telegram?.WebApp?.themeParams;
+  const root = document.documentElement;
+  const webApp = window.Telegram?.WebApp;
+  const theme = webApp?.themeParams;
+
+  let isDark = false;
+
+  // 1. Telegram uzatgan rang eng ustuvor hisoblanadi (Telegram oq bo'lsa, 100% yorug' rejim bo'ladi)
+  if (theme?.bg_color) {
+    isDark = isHexColorDark(theme.bg_color);
+  } else if (webApp?.colorScheme) {
+    isDark = webApp.colorScheme === 'dark';
+  } else {
+    // 2. Agar Telegram ma'lumot bermagan bo'lsa, foydalanuvchi sozlamasi tekshiriladi
+    const storedTheme = localStorage.getItem('bilimgo_theme');
+    if (storedTheme === 'dark') {
+      isDark = true;
+    } else {
+      isDark = false; // Standart holat har doim YORUG' (LIGHT) rejim! Telefon tizim qorong'iligi majburlanmaydi
+    }
+  }
+
+  if (isDark) {
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+  }
+
   if (!theme) return;
 
-  const root = document.documentElement;
   if (theme.bg_color) root.style.setProperty('--tg-theme-bg-color', theme.bg_color);
   if (theme.secondary_bg_color) root.style.setProperty('--tg-theme-secondary-bg-color', theme.secondary_bg_color);
   if (theme.text_color) root.style.setProperty('--tg-theme-text-color', theme.text_color);

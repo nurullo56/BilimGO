@@ -14,6 +14,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from bot.handlers.admin.broadcast import router as admin_broadcast_router
 from bot.handlers.admin.quota import router as admin_quota_router
 from bot.handlers.admin.stats import router as admin_stats_router
+from bot.handlers.admin.mentor_approval import router as mentor_approval_router
 from bot.handlers.common.cabinet_link import router as cabinet_link_router
 from bot.handlers.common.mentor_add import router as mentor_add_router
 from bot.handlers.common.profile import router as profile_router
@@ -94,6 +95,7 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(admin_quota_router)
     dp.include_router(registration_router)
     dp.include_router(mentor_add_router)
+    dp.include_router(mentor_approval_router)
     dp.include_router(profile_router)
     dp.include_router(cabinet_link_router)
     dp.include_router(student_catalog_router)

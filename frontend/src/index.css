@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --font-sans: 'SF Pro Rounded', 'Nunito', 'Quicksand', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -17,22 +18,20 @@
   --tg-theme-header-bg-color: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --tg-theme-bg-color: #09090b;
-    --tg-theme-secondary-bg-color: #18181b;
-    --tg-theme-text-color: #f4f4f5;
-    --tg-theme-hint-color: #a1a1aa;
-    --tg-theme-link-color: #38bdf8;
-    --tg-theme-button-color: #2563eb;
-    --tg-theme-button-text-color: #ffffff;
-    --tg-theme-accent-text-color: #38bdf8;
-    --tg-theme-section-bg-color: #18181b;
-    --tg-theme-section-header-text-color: #a1a1aa;
-    --tg-theme-subtitle-text-color: #a1a1aa;
-    --tg-theme-destructive-text-color: #f87171;
-    --tg-theme-header-bg-color: #09090b;
-  }
+:root.dark, html.dark {
+  --tg-theme-bg-color: #17212b;
+  --tg-theme-secondary-bg-color: #232e3c;
+  --tg-theme-text-color: #f4f4f5;
+  --tg-theme-hint-color: #a1a1aa;
+  --tg-theme-link-color: #38bdf8;
+  --tg-theme-button-color: #2563eb;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-accent-text-color: #38bdf8;
+  --tg-theme-section-bg-color: #1c2733;
+  --tg-theme-section-header-text-color: #a1a1aa;
+  --tg-theme-subtitle-text-color: #a1a1aa;
+  --tg-theme-destructive-text-color: #f87171;
+  --tg-theme-header-bg-color: #17212b;
 }
 
 body {

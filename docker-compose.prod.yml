@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  bilimgo_web:
+    build:
+      context: ./BilimGo
+      dockerfile: docker/Dockerfile
+    container_name: bilimgo_web
+    restart: always
+    environment:
+      - DB_PATH=/app/data/bilimgo.db
+    volumes:
+      - ./BilimGo/data:/app/data
+      - ./BilimGo/logs:/app/logs
+    ports:
+      - "8000:8000"
+    command: uvicorn web.main:app --host 0.0.0.0 --port 8000
+
+  bilimgo_bot:
+    build:
+      context: ./BilimGo
+      dockerfile: docker/Dockerfile
+    container_name: bilimgo_bot
+    restart: always
+    environment:
+      - DB_PATH=/app/data/bilimgo.db
+    volumes:
+      - ./BilimGo/data:/app/data
+      - ./BilimGo/logs:/app/logs
+    command: python -m bot.main

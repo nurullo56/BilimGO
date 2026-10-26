@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Settings, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Bell, Settings } from 'lucide-react';
 import { AppView, TelegramUser } from '../types';
 import { triggerHaptic } from '../services/telegram';
 
@@ -8,22 +8,30 @@ interface NavbarProps {
   onNavigate: (view: AppView) => void;
   user: TelegramUser | null;
   onOpenSettings: () => void;
+  onOpenNotifications?: () => void;
+  hasUnreadNotifications?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
-  user,
+  user: _user,
   onOpenSettings,
+  onOpenNotifications,
+  hasUnreadNotifications = true,
 }) => {
-  const isHome = currentView.type === 'catalog' || currentView.type === 'my-courses' || currentView.type === 'profile' || (currentView.type === 'cabinet' && !currentView.cabinetId);
+  const isHome =
+    currentView.type === 'catalog' ||
+    currentView.type === 'my-courses' ||
+    currentView.type === 'profile' ||
+    (currentView.type === 'cabinet' && !currentView.cabinetId);
   const showBack = !isHome;
 
   const handleBack = () => {
     triggerHaptic('light');
     if (currentView.type === 'lesson') {
       onNavigate({ type: 'course', courseId: currentView.courseId });
-    } else if (currentView.type === 'live') {
+    } else if (currentView.type === 'live' || currentView.type === 'live-stream') {
       onNavigate({ type: 'course', courseId: currentView.courseId });
     } else if (currentView.type === 'mentor-stats') {
       onNavigate({ type: 'cabinet', cabinetId: currentView.cabinetId });
@@ -34,134 +42,71 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
-  const getTitle = () => {
-    switch (currentView.type) {
-      case 'catalog':
-        return 'BilimGo';
-      case 'my-courses':
-        return 'Mening kurslarim';
-      case 'cabinet':
-        return 'Kabinet & Muloqot';
-      case 'profile':
-        return 'Mening Profilim';
-      case 'course':
-        return 'Kurs tafsilotlari';
-      case 'lesson':
-        return 'Video Dars';
-      case 'live':
-        return 'Jonli Darslar';
-      case 'mentor-stats':
-        return 'Mentor Statistikasi';
-      default:
-        return 'BilimGo';
-    }
-  };
-
-  const [navAvatarError, setNavAvatarError] = React.useState(false);
-  const navAvatarUrl = (!navAvatarError && (user?.photo_url || (user?.id ? `/api/users/${user.id}/avatar` : ''))) || '';
-
-  const getSubtitle = () => {
-    switch (currentView.type) {
-      case 'catalog':
-        return 'Adaptiv o\'quv platformasi';
-      case 'my-courses':
-        return 'Shaxsiy o\'zlashtirish jarayoni';
-      case 'cabinet':
-        return 'Mentor va guruh bilan chat';
-      case 'profile':
-        return 'Shaxsiy profil va yutuqlar';
-      case 'course':
-        return 'Darslar va materiallar';
-      case 'lesson':
-        return 'Video Dars';
-      case 'live':
-        return 'Jonli vebinarlar & savol-javob';
-      case 'mentor-stats':
-        return 'Talabalar faolligi & ko\'rsatkichlar';
-      default:
-        return '';
-    }
-  };
-
   return (
-    <header className="sticky top-0 z-40 w-full bg-tg-bg/95 backdrop-blur border-b border-tg-secondary px-4 py-3 transition-colors">
-      <div className="max-w-3xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {showBack ? (
+    <header className="sticky top-0 z-40 w-full bg-transparent transition-all duration-200 px-4 pt-3 pb-2 sm:px-6">
+      <div className="max-w-4xl mx-auto flex items-center justify-between">
+        {/* Left Section: Back Button (if deep view) + Bilim GO Logo (compact & elegant) */}
+        <div className="flex items-center gap-2">
+          {showBack && (
             <button
               id="btn-nav-back"
               onClick={handleBack}
-              className="p-1.5 rounded-xl bg-tg-secondary hover:bg-blue-500/15 hover:text-blue-500 text-tg-text transition-all active:scale-90 cursor-pointer shadow-2xs"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100/80 hover:bg-slate-200/90 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white transition-all active:scale-90 cursor-pointer shrink-0"
               title="Orqaga"
             >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <ArrowLeft className="w-4.5 h-4.5 stroke-[2.2]" />
             </button>
-          ) : (
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
           )}
 
-          <div className="min-w-0">
-            <h1 className="text-sm sm:text-base font-extrabold text-tg-text tracking-tight truncate">
-              {getTitle()}
-            </h1>
-            {getSubtitle() && (
-              <p className="text-[10px] sm:text-xs text-tg-hint truncate leading-none mt-0.5">
-                {getSubtitle()}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Right Section: User Pill & Dev API Button */}
-        <div className="flex items-center gap-2">
-          {/* User profile quick toggle button */}
           <button
-            id="btn-navbar-profile"
             onClick={() => {
               triggerHaptic('light');
-              onNavigate({ type: 'profile' });
+              onNavigate({ type: 'catalog' });
             }}
-            className={`flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full border text-xs cursor-pointer active:scale-95 transition-all ${
-              currentView.type === 'profile'
-                ? 'bg-blue-600/15 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'bg-tg-secondary border-tg-secondary text-tg-text hover:border-blue-500/40'
-            }`}
-            title="Profilga o'tish"
+            className="flex items-center gap-1 cursor-pointer select-none text-left focus:outline-none active:opacity-85 transition-opacity"
+            title="Bilim GO"
           >
-            <div className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-[10px] overflow-hidden">
-              {navAvatarUrl ? (
-                <img
-                  src={navAvatarUrl}
-                  alt={user?.first_name || 'Profil'}
-                  referrerPolicy="no-referrer"
-                  onError={() => setNavAvatarError(true)}
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                user?.first_name?.charAt(0) || <User className="w-3 h-3" />
-              )}
-            </div>
-            <span className="font-semibold max-w-[80px] sm:max-w-[120px] truncate text-xs">
-              {user?.first_name || 'Profil'}
+            <span className="text-xl sm:text-[22px] font-black tracking-tight leading-none text-slate-900 dark:text-white transition-colors">
+              Bilim <span className="text-[#2481cc] dark:text-[#3390ec]">GO</span>
             </span>
           </button>
+        </div>
 
-          {/* API settings button (Faqat DEV rejimida) */}
-          {import.meta.env.DEV && (
-            <button
-              id="btn-open-settings"
-              onClick={() => {
-                triggerHaptic('light');
-                onOpenSettings();
-              }}
-              className="p-2 rounded-xl bg-tg-secondary text-tg-hint hover:text-tg-text active:scale-95 transition-all cursor-pointer"
-              title="API Sozlamalari"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          )}
+        {/* Right Section: Notification Bell + Settings Gear (compact, sleek circular buttons) */}
+        <div className="flex items-center gap-2">
+          {/* Notification Button with Blue Indicator Dot */}
+          <button
+            id="btn-nav-notifications"
+            onClick={() => {
+              triggerHaptic('light');
+              if (onOpenNotifications) {
+                onOpenNotifications();
+              }
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center relative bg-slate-100/80 hover:bg-slate-200/90 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white transition-all duration-200 active:scale-95 cursor-pointer"
+            title="Bildirishnomalar"
+          >
+            <Bell className="w-4.5 h-4.5 stroke-[2]" />
+            {hasUnreadNotifications && (
+              <span
+                className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-[#2481cc] dark:bg-[#3390ec] ring-2 ring-white dark:ring-[#17212b]"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+
+          {/* Settings Button */}
+          <button
+            id="btn-nav-settings"
+            onClick={() => {
+              triggerHaptic('light');
+              onOpenSettings();
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100/80 hover:bg-slate-200/90 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white transition-all duration-200 active:scale-95 cursor-pointer"
+            title="Sozlamalar"
+          >
+            <Settings className="w-4.5 h-4.5 stroke-[2]" />
+          </button>
         </div>
       </div>
     </header>
