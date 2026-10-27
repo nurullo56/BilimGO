@@ -11,6 +11,7 @@ TARIFF_LIMITS: dict[str, dict[str, int]] = {
         "Telegram Ads": 6,
         "Konkurs/Aksiya": 5,
         "Saytdan daromad": 3,
+        "ChinaSeller": 7,
         "Xitoy": 7,
     },
     "pro": {
@@ -18,6 +19,7 @@ TARIFF_LIMITS: dict[str, dict[str, int]] = {
         "Telegram Ads": 15,
         "Konkurs/Aksiya": 12,
         "Saytdan daromad": 8,
+        "ChinaSeller": 15,
         "Xitoy": 15,
     },
     "vip": {
@@ -25,6 +27,7 @@ TARIFF_LIMITS: dict[str, dict[str, int]] = {
         "Telegram Ads": 35,
         "Konkurs/Aksiya": 30,
         "Saytdan daromad": 20,
+        "ChinaSeller": 28,
         "Xitoy": 28,
     },
 }

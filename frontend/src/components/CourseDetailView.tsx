@@ -14,7 +14,15 @@ import {
   Video,
 } from 'lucide-react';
 import { Course, Lesson, AppView } from '../types';
-import { fetchCourseById, fetchCourseLessons, fetchLiveSessions } from '../services/api';
+import {
+  fetchCourseById,
+  fetchCourseLessons,
+  fetchLiveSessions,
+  fetchCourseWaitlistStatus,
+  joinCourseWaitlist,
+  leaveCourseWaitlist,
+  CourseWaitlistStatus,
+} from '../services/api';
 import { PaymentModal } from './PaymentModal';
 import { triggerHaptic } from '../services/telegram';
 import { TgText } from './TgEmoji';
@@ -36,6 +44,8 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [waitlistStatus, setWaitlistStatus] = useState<CourseWaitlistStatus | null>(null);
+  const [joiningWaitlist, setJoiningWaitlist] = useState(false);
 
   useEffect(() => {
     loadCourseDetails();
@@ -45,18 +55,57 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const [courseData, lessonsData, liveData] = await Promise.all([
+      const [courseData, lessonsData, liveData, wlData] = await Promise.all([
         fetchCourseById(courseId),
         fetchCourseLessons(courseId),
         fetchLiveSessions(courseId).catch(() => []),
+        fetchCourseWaitlistStatus(courseId).catch(() => null),
       ]);
       setCourse(courseData);
       setLessons(lessonsData);
       setLiveCount(liveData.length);
+      if (wlData) setWaitlistStatus(wlData);
     } catch (err: any) {
       setError(err.message || 'Kurs ma\'lumotlarini yuklashda xatolik');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinWaitlist = async () => {
+    triggerHaptic('medium');
+    setJoiningWaitlist(true);
+    try {
+      const res = await joinCourseWaitlist(courseId);
+      setWaitlistStatus({
+        course_id: Number(courseId),
+        is_in_waitlist: true,
+        waitlist_count: res.waitlist_count || 1,
+      });
+      triggerHaptic('success');
+    } catch (err: any) {
+      alert(err.message || 'Waitlistga qo\'shilishda xatolik yuz berdi');
+      triggerHaptic('error');
+    } finally {
+      setJoiningWaitlist(false);
+    }
+  };
+
+  const handleLeaveWaitlist = async () => {
+    if (!window.confirm("Rostdan ham navbatdan chiqmoqchimisiz?")) return;
+    triggerHaptic('light');
+    setJoiningWaitlist(true);
+    try {
+      await leaveCourseWaitlist(courseId);
+      setWaitlistStatus((prev) => ({
+        course_id: Number(courseId),
+        is_in_waitlist: false,
+        waitlist_count: Math.max(0, (prev ? prev.waitlist_count - 1 : 0)),
+      }));
+    } catch (err: any) {
+      console.warn('Waitlistdan chiqishda xatolik', err);
+    } finally {
+      setJoiningWaitlist(false);
     }
   };
 
@@ -150,9 +199,65 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Action Bar: Purchase / Live sessions */}
+          {/* Action Bar: Waitlist / Purchase / Live sessions */}
           <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-            {isEnrolled ? (
+            {course.is_waitlist ? (
+              <div className="w-full space-y-3">
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/10 border border-amber-500/30 flex items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-tg-text">Kutish ro'yxati (Waitlist)</h4>
+                      <p className="text-xs text-tg-hint">
+                        {waitlistStatus?.waitlist_count || 1} kishi navbatga yozilgan
+                      </p>
+                    </div>
+                  </div>
+                  {waitlistStatus?.is_in_waitlist && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                      Siz navbatdasiz
+                    </span>
+                  )}
+                </div>
+
+                {waitlistStatus?.is_in_waitlist ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-3 px-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-bold flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>Siz navbatdasiz! Kurs tayyor bo'lishi bilan xabar yuboramiz.</span>
+                    </div>
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={handleLeaveWaitlist}
+                        disabled={joiningWaitlist}
+                        className="text-xs text-tg-hint hover:text-rose-500 underline cursor-pointer font-medium"
+                      >
+                        Navbatdan chiqish
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleJoinWaitlist}
+                    disabled={joiningWaitlist}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 active:scale-98 text-white font-bold text-sm shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {joiningWaitlist ? (
+                      <span>Qo'shilmoqda...</span>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Navbatga yozilish (Waitlistga qo'shilish)</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            ) : isEnrolled ? (
               <div
                 id="badge-course-enrolled"
                 className="flex-1 py-3 px-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs"
@@ -203,6 +308,39 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Waitlist Course Syllabus Preview */}
+      {course.is_waitlist && (
+        <div className="bg-tg-section border border-tg-secondary rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h3 className="font-bold text-sm sm:text-base text-tg-text">Kutilayotgan Dastur Rejasi</h3>
+            </div>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+              Ishlab chiqilmoqda ⏳
+            </span>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {[
+              { title: "1. Sun'iy Intellekt va ChatGPT Asoslari (Prompt muhandisligi)", desc: "To'g'ri buyruqlar berish va sun'iy intellektdan 10x samarali foydalanish", icon: "🧠" },
+              { title: "2. Midjourney va AI Vizual Dizayn generatsiyasi", desc: "Biznes, ijtimoiy tarmoqlar va bannerlar uchun professional rasmlar yaratish", icon: "🎨" },
+              { title: "3. Telegram AI Botlar va Aqlli Agentlar yaratish", desc: "Mijozlarga avtomatik xizmat ko'rsatuvchi sun'iy intellekt botlarini kodsiz ishga tushirish", icon: "🤖" },
+              { title: "4. Ma'lumotlar tahlili va Biznes jarayonlarini avtomatlashtirish", desc: "Kundalik takroriy ishlarni AI yordamida avtomatik boshqarish", icon: "⚡" },
+              { title: "5. Shaxsiy AI yordamchi va Katta loyihalar bilan integratsiya", desc: "Kompaniya bilimlari asosida ishlovchi maxsus AI yordamchini o'rgatish", icon: "🚀" },
+            ].map((item, idx) => (
+              <div key={idx} className="p-3.5 rounded-2xl bg-tg-secondary/40 border border-tg-secondary/60 flex items-start gap-3">
+                <span className="text-lg shrink-0">{item.icon}</span>
+                <div className="space-y-0.5 min-w-0">
+                  <h4 className="font-bold text-xs sm:text-sm text-tg-text">{item.title}</h4>
+                  <p className="text-xs text-tg-hint leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Course Overall Progress Tracker */}
       {lessons.length > 0 && (

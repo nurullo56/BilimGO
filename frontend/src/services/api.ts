@@ -71,25 +71,25 @@ export function cleanNumericId(id: string | number | undefined | null): number {
 export function enhanceCourse(c: any): Course {
   const idNum = cleanNumericId(c.id);
   const title = c.title || 'Nomsiz kurs';
+  const t = title.toLowerCase();
   
   let category = c.category;
   let thumbnail = c.thumbnail;
   let instructor = c.instructor || 'Nurulloh Habibullayev (Bosh Mentor)';
 
   if (!category) {
-    const t = title.toLowerCase();
     if (t.includes('logist')) category = 'Logistika & Dispetcherlik';
     else if (t.includes('ads') || t.includes('reklama')) category = 'Telegram Marketing';
     else if (t.includes('konkurs') || t.includes('aksiya')) category = 'Biznes & Konkurs';
     else if (t.includes('sayt') || t.includes('daromad')) category = 'Web & Monetizatsiya';
-    else if (t.includes('xitoy') || t.includes('import')) category = 'Savdo & Import';
+    else if (t.includes('xitoy') || t.includes('import') || t.includes('chinaseller')) category = 'Savdo & Import';
     else if (t.includes('python') || t.includes('backend')) category = 'Backend Dasturlash';
+    else if (t.includes('ai') || t.includes('intellekt') || t.includes("sun'iy")) category = "Sun'iy Intellekt (AI)";
     else if (t.includes('react') || t.includes('mini app')) category = 'Frontend & TMA';
     else category = 'Amaliy Kurs';
   }
 
   if (!thumbnail) {
-    const t = title.toLowerCase();
     if (t.includes('logist')) {
       thumbnail = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=60';
     } else if (t.includes('ads') || t.includes('reklama')) {
@@ -98,7 +98,9 @@ export function enhanceCourse(c: any): Course {
       thumbnail = 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop&q=60';
     } else if (t.includes('sayt') || t.includes('daromad')) {
       thumbnail = 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60';
-    } else if (t.includes('xitoy') || t.includes('import')) {
+    } else if (t.includes('ai') || t.includes('intellekt') || t.includes("sun'iy")) {
+      thumbnail = '/assets/ai_course.jpg';
+    } else if (t.includes('xitoy') || t.includes('import') || t.includes('chinaseller')) {
       thumbnail = 'https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=800&auto=format&fit=crop&q=60';
     } else {
       thumbnail = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60';
@@ -118,6 +120,7 @@ export function enhanceCourse(c: any): Course {
     has_access: Boolean(c.has_access || c.is_enrolled),
     total_lessons: c.total_lessons || 0,
     total_duration_minutes: c.total_duration_minutes || (c.total_duration_sec ? Math.round(c.total_duration_sec / 60) : 0),
+    is_waitlist: Boolean(c.is_waitlist || t.includes('ai') || t.includes("sun'iy intellekt")),
   };
 }
 
@@ -1532,5 +1535,149 @@ export async function fetchLessonQuizStatus(
     `/api/quizzes/lesson/${cleanId}/status`,
     { method: 'GET' },
     () => ({ lesson_id: Number(cleanId), total_quizzes: 0, passed: true, attempts_count: 0 })
+  );
+}
+
+// ==========================================
+// 28. IN-APP USER NOTIFICATIONS
+// ==========================================
+
+export interface AppNotification {
+  id: number;
+  user_id: number;
+  type: 'ai_evaluation' | 'mentor' | 'lesson' | 'course' | 'system';
+  title: string;
+  message: string;
+  link?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  notifications: AppNotification[];
+  unread_count: number;
+}
+
+export async function fetchNotifications(): Promise<NotificationsResponse> {
+  return request<NotificationsResponse>(
+    '/api/notifications',
+    { method: 'GET' },
+    () => ({ notifications: [], unread_count: 0 })
+  );
+}
+
+export async function markNotificationAsRead(
+  notificationId: number
+): Promise<{ success: boolean; unread_count: number }> {
+  return request<{ success: boolean; unread_count: number }>(
+    `/api/notifications/${notificationId}/read`,
+    { method: 'POST' }
+  );
+}
+
+export async function markAllNotificationsAsRead(): Promise<{
+  success: boolean;
+  updated_count: number;
+  unread_count: number;
+}> {
+  return request<{ success: boolean; updated_count: number; unread_count: number }>(
+    '/api/notifications/read-all',
+    { method: 'POST' }
+  );
+}
+
+// ==========================================
+// 29. COURSE WAITLIST APIS
+// ==========================================
+
+export interface CourseWaitlistStatus {
+  course_id: number;
+  is_in_waitlist: boolean;
+  waitlist_count: number;
+}
+
+export async function fetchCourseWaitlistStatus(
+  courseId: string | number
+): Promise<CourseWaitlistStatus> {
+  const cleanId = cleanNumericId(courseId);
+  return request<CourseWaitlistStatus>(
+    `/api/courses/${cleanId}/waitlist`,
+    { method: 'GET' },
+    () => ({ course_id: Number(cleanId), is_in_waitlist: false, waitlist_count: 0 })
+  );
+}
+
+export async function joinCourseWaitlist(
+  courseId: string | number,
+  phone?: string
+): Promise<{ success: boolean; message: string; waitlist_count: number; is_in_waitlist: boolean }> {
+  const cleanId = cleanNumericId(courseId);
+  return request<{ success: boolean; message: string; waitlist_count: number; is_in_waitlist: boolean }>(
+    `/api/courses/${cleanId}/waitlist`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    }
+  );
+}
+
+export async function leaveCourseWaitlist(
+  courseId: string | number
+): Promise<{ success: boolean; message: string; is_in_waitlist: boolean }> {
+  const cleanId = cleanNumericId(courseId);
+  return request<{ success: boolean; message: string; is_in_waitlist: boolean }>(
+    `/api/courses/${cleanId}/waitlist`,
+    { method: 'DELETE' }
+  );
+}
+
+// ==========================================
+// 30. STUDENT FEEDBACK APIS
+// ==========================================
+
+export interface StudentFeedbackPayload {
+  rating: number;
+  comment: string;
+  category?: 'general' | 'lesson' | 'suggestion' | 'bug';
+  course_id?: number | string | null;
+  lesson_id?: number | string | null;
+}
+
+export interface StudentFeedbackResponse {
+  status: string;
+  feedback_id: number;
+  message: string;
+}
+
+export async function submitStudentFeedback(
+  payload: StudentFeedbackPayload
+): Promise<StudentFeedbackResponse> {
+  const body = {
+    rating: payload.rating,
+    comment: payload.comment,
+    category: payload.category || 'general',
+    course_id: payload.course_id ? cleanNumericId(payload.course_id) : null,
+    lesson_id: payload.lesson_id ? cleanNumericId(payload.lesson_id) : null,
+  };
+
+  return request<StudentFeedbackResponse>(
+    '/api/feedback',
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+    () => ({
+      status: 'success',
+      feedback_id: Date.now(),
+      message: 'Fikringiz uchun rahmat! (Offline test rejimi)',
+    })
+  );
+}
+
+export async function fetchMyFeedbacks(): Promise<any[]> {
+  return request<any[]>(
+    '/api/feedback/my',
+    { method: 'GET' },
+    () => []
   );
 }

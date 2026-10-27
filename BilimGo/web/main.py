@@ -25,6 +25,9 @@ from web.routers.player import router as player_router
 from web.routers.quiz import router as quiz_router
 from web.routers.server_expenses import router as server_expenses_router
 from web.routers.users import router as users_router
+from web.routers.notifications import router as notifications_router
+from web.routers.waitlist import router as waitlist_router
+from web.routers.feedback import router as feedback_router
 
 
 @asynccontextmanager
@@ -58,6 +61,9 @@ app.include_router(ai_tutor_router)
 app.include_router(quiz_router)
 app.include_router(server_expenses_router)
 app.include_router(users_router)
+app.include_router(notifications_router)
+app.include_router(waitlist_router)
+app.include_router(feedback_router)
 
 
 # Search for built React frontend dist in various possible locations
@@ -99,5 +105,4 @@ async def serve_mini_app_spa(full_path: str = ""):
             },
         )
     return {"message": "BilimGo API running"}
-
 

@@ -220,6 +220,57 @@ async def get_user_profile(
     streak_row = await streak_cursor.fetchone()
     streak_days = streak_row["streak"] if streak_row else 1
 
+    # Real daily activity calculation for the last 14 days
+    cursor_act = await conn.execute(
+        """
+        SELECT 
+            date(started_at) as view_date,
+            COUNT(id) as views_count,
+            COALESCE(SUM(watch_duration_sec), 0) as total_sec
+        FROM lesson_views
+        WHERE user_id = ? AND started_at >= datetime('now', '-30 days')
+        GROUP BY date(started_at)
+        """,
+        (user.id,),
+    )
+    act_rows = {r["view_date"]: dict(r) for r in await cursor_act.fetchall()}
+
+    import datetime
+    today = datetime.date.today()
+    uzbek_day_names = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
+    daily_activity = []
+
+    for i in range(13, -1, -1):
+        d = today - datetime.timedelta(days=i)
+        d_str = d.strftime("%Y-%m-%d")
+        act = act_rows.get(d_str)
+        mins = round((act["total_sec"] if act else 0) / 60)
+        views = act["views_count"] if act else 0
+        is_today = (i == 0)
+        is_active = (mins > 0 or views > 0)
+
+        if mins >= 60:
+            h = "h-14"
+        elif mins >= 30:
+            h = "h-12"
+        elif mins >= 15:
+            h = "h-10"
+        elif mins > 0 or views > 0:
+            h = "h-8"
+        else:
+            h = "h-6"
+
+        daily_activity.append({
+            "date": d_str,
+            "day_label": uzbek_day_names[d.weekday()],
+            "formatted_date": f"{d.day:02d}.{d.month:02d}",
+            "minutes": mins,
+            "views_count": views,
+            "active": is_active,
+            "height": h,
+            "is_today": is_today,
+        })
+
     return {
         "id": f"u-{user.id}",
         "telegram_id": user.telegram_id,
@@ -238,6 +289,7 @@ async def get_user_profile(
         "joined_date": user.created_at[:10] if user.created_at else "2026",
         "wallet_balance": 0,
         "certificate_count": 1 if completed_lessons >= 10 else 0,
+        "daily_activity": daily_activity,
     }
 
 

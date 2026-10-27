@@ -21,6 +21,7 @@ import {
   Sparkles,
   Video as VideoIcon,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import { Lesson, Course, AppView } from '../types';
 import {
@@ -36,6 +37,7 @@ import {
 import { triggerHaptic, getTelegramUser } from '../services/telegram';
 import { LessonAiAssistant } from './LessonAiAssistant';
 import { LessonQuizCard } from './LessonQuizCard';
+import { FeedbackModal } from './FeedbackModal';
 import { TgText } from './TgEmoji';
 
 interface VideoPlayerViewProps {
@@ -72,6 +74,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const [isTextLesson, setIsTextLesson] = useState(false);
   const [copiedTemplate, setCopiedTemplate] = useState(false);
   const [showCourseCompletedModal, setShowCourseCompletedModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [watermarkPos, setWatermarkPos] = useState({ top: '25%', left: '20%' });
   const [studentProfile, setStudentProfile] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -818,6 +821,20 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
             </p>
           )}
 
+          {/* Dars haqida fikr bildirish (Student Feedback) */}
+          <div className="flex items-center justify-end pt-1">
+            <button
+              onClick={() => {
+                triggerHaptic('light');
+                setShowFeedbackModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-tg-secondary hover:bg-tg-secondary/80 text-xs font-semibold text-tg-text transition-all cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Dars haqida fikr bildirish</span>
+            </button>
+          </div>
+
           {/* Prev / Next Lesson Navigation Buttons */}
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-tg-secondary">
             {prevLesson ? (
@@ -890,6 +907,16 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
           lesson={currentLesson}
         />
       )}
+
+      {/* Lesson Feedback Modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        courseId={courseId}
+        lessonId={lessonId}
+        courseTitle={course?.title}
+        lessonTitle={currentLesson?.title}
+      />
     </div>
   );
 };

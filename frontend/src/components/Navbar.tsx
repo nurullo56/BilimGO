@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Bell, Settings } from 'lucide-react';
+import { ArrowLeft, Bell, Settings, MessageSquare } from 'lucide-react';
 import { AppView, TelegramUser } from '../types';
 import { triggerHaptic } from '../services/telegram';
 
@@ -9,6 +9,7 @@ interface NavbarProps {
   user: TelegramUser | null;
   onOpenSettings: () => void;
   onOpenNotifications?: () => void;
+  onOpenFeedback?: () => void;
   hasUnreadNotifications?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   user: _user,
   onOpenSettings,
   onOpenNotifications,
+  onOpenFeedback,
   hasUnreadNotifications = true,
 }) => {
   const isHome =
@@ -72,8 +74,23 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Right Section: Notification Bell + Settings Gear (compact, sleek circular buttons) */}
+        {/* Right Section: Feedback + Notification Bell + Settings Gear */}
         <div className="flex items-center gap-2">
+          {/* Feedback Button */}
+          {onOpenFeedback && (
+            <button
+              id="btn-nav-feedback"
+              onClick={() => {
+                triggerHaptic('light');
+                onOpenFeedback();
+              }}
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100/80 hover:bg-slate-200/90 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white transition-all duration-200 active:scale-95 cursor-pointer"
+              title="Fikr-mulohaza bildirish"
+            >
+              <MessageSquare className="w-4.5 h-4.5 stroke-[2]" />
+            </button>
+          )}
+
           {/* Notification Button with Blue Indicator Dot */}
           <button
             id="btn-nav-notifications"

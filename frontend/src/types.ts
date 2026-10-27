@@ -11,6 +11,7 @@ export interface Course {
   total_duration_minutes?: number;
   is_enrolled?: boolean;
   has_access?: boolean;
+  is_waitlist?: boolean;
 }
 
 export interface Lesson {
@@ -149,6 +150,17 @@ export interface TelegramUser {
   language_code?: string;
 }
 
+export interface DailyActivityItem {
+  date: string;
+  day_label: string;
+  formatted_date: string;
+  minutes: number;
+  views_count: number;
+  active: boolean;
+  height: string;
+  is_today: boolean;
+}
+
 export interface UserProfile {
   id: string | number;
   telegram_id: number | string;
@@ -167,6 +179,7 @@ export interface UserProfile {
   joined_date: string;
   wallet_balance?: number;
   certificate_count?: number;
+  daily_activity?: DailyActivityItem[];
 }
 
 export type AppView = 

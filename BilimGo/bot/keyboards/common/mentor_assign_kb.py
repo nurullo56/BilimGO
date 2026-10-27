@@ -29,19 +29,19 @@ def get_mentor_tariff_keyboard(target_mentor_id: int, course_id: int) -> InlineK
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🥉 Standart (Logistika: 20, TgAds: 6, Konkurs: 5, Sayt: 3, Xitoy: 7)",
+                    text="🥉 Standart (Logistika: 20, TgAds: 6, Konkurs: 5, Sayt: 3, ChinaSeller: 7)",
                     callback_data=f"mentor_set_tariff:{target_mentor_id}:{course_id}:standart",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🥈 Pro (Logistika: 45, TgAds: 15, Konkurs: 12, Sayt: 8, Xitoy: 15)",
+                    text="🥈 Pro (Logistika: 45, TgAds: 15, Konkurs: 12, Sayt: 8, ChinaSeller: 15)",
                     callback_data=f"mentor_set_tariff:{target_mentor_id}:{course_id}:pro",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🥇 VIP (Logistika: 100, TgAds: 35, Konkurs: 30, Sayt: 20, Xitoy: 28)",
+                    text="🥇 VIP (Logistika: 100, TgAds: 35, Konkurs: 30, Sayt: 20, ChinaSeller: 28)",
                     callback_data=f"mentor_set_tariff:{target_mentor_id}:{course_id}:vip",
                 )
             ],

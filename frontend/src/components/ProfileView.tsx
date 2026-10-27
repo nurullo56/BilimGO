@@ -30,8 +30,9 @@ import {
   ArrowRight,
   Camera,
   CreditCard,
+  MessageSquare,
 } from 'lucide-react';
-import { UserProfile, AppView, Course } from '../types';
+import { UserProfile, AppView, Course, DailyActivityItem } from '../types';
 import {
   fetchUserProfile,
   updateUserProfile,
@@ -44,6 +45,7 @@ import {
   MentorCardInfo,
 } from '../services/api';
 import { CardBindingModal } from './CardBindingModal';
+import { FeedbackModal } from './FeedbackModal';
 import { triggerHaptic, getTelegramUser } from '../services/telegram';
 
 interface ProfileViewProps {
@@ -57,6 +59,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -73,6 +76,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
   const [cardInfo, setCardInfo] = useState<MentorCardInfo | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [unbindingCard, setUnbindingCard] = useState(false);
+
+  // Daily Activity State & Horizontal Scroll
+  const activityScrollRef = React.useRef<HTMLDivElement>(null);
+  const [selectedActivityDay, setSelectedActivityDay] = useState<DailyActivityItem | null>(null);
+
+  useEffect(() => {
+    if (activityScrollRef.current) {
+      activityScrollRef.current.scrollLeft = activityScrollRef.current.scrollWidth;
+    }
+  }, [profile?.daily_activity]);
 
   // Mentor Application State
   const [showMentorModal, setShowMentorModal] = useState(false);
@@ -337,16 +350,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
       ? `${studyMins} daq`
       : '0 daq';
 
-  // Days of week for activity chart
-  const daysOfWeek = [
-    { label: 'Du', active: true, height: 'h-8' },
-    { label: 'Se', active: true, height: 'h-10' },
-    { label: 'Ch', active: true, height: 'h-9' },
-    { label: 'Pa', active: true, height: 'h-12' },
-    { label: 'Ju', active: true, height: 'h-9' },
-    { label: 'Sh', active: false, height: 'h-8' },
-    { label: 'Ya', active: true, height: 'h-10' },
-  ];
+  const dailyActivityList: DailyActivityItem[] =
+    profile?.daily_activity && profile.daily_activity.length > 0
+      ? profile.daily_activity
+      : [
+          { date: '2026-10-20', day_label: 'Du', formatted_date: '20.10', minutes: 20, views_count: 1, active: true, height: 'h-8', is_today: false },
+          { date: '2026-10-21', day_label: 'Se', formatted_date: '21.10', minutes: 35, views_count: 2, active: true, height: 'h-10', is_today: false },
+          { date: '2026-10-22', day_label: 'Ch', formatted_date: '22.10', minutes: 25, views_count: 1, active: true, height: 'h-9', is_today: false },
+          { date: '2026-10-23', day_label: 'Pa', formatted_date: '23.10', minutes: 60, views_count: 3, active: true, height: 'h-14', is_today: false },
+          { date: '2026-10-24', day_label: 'Ju', formatted_date: '24.10', minutes: 30, views_count: 2, active: true, height: 'h-10', is_today: false },
+          { date: '2026-10-25', day_label: 'Sh', formatted_date: '25.10', minutes: 0, views_count: 0, active: false, height: 'h-6', is_today: false },
+          { date: '2026-10-26', day_label: 'Ya', formatted_date: '26.10', minutes: 45, views_count: 2, active: true, height: 'h-12', is_today: true },
+        ];
 
   return (
     <div className="space-y-3.5 pb-28 max-w-2xl mx-auto px-4 pt-1 animate-in fade-in duration-200">
@@ -534,45 +549,97 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
       {/* ======================================================== */}
       {/* 3. MENING FAOLIYATIM (Activity Streak Chart Card)       */}
       {/* ======================================================== */}
-      <div className="bg-tg-section border border-tg-secondary rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="bg-tg-section border border-tg-secondary rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             <h3 className="font-bold text-sm sm:text-base text-tg-text">Mening faoliyatim</h3>
           </div>
-          <div className="flex items-center gap-1 text-xs text-tg-hint font-medium">
-            <span>Bu hafta</span>
-            <ChevronDown className="w-3.5 h-3.5 text-tg-hint" />
+          <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              Faollik davom etmoqda
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 pt-1">
-          {/* 7 Days Pill Bars */}
-          <div className="flex items-end gap-2.5 sm:gap-3.5">
-            {daysOfWeek.map((day, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-2">
-                <div
-                  className={`w-3.5 sm:w-4 rounded-full transition-all ${
-                    day.active
-                      ? `${day.height} bg-blue-600 shadow-2xs`
-                      : 'h-8 bg-tg-secondary'
-                  }`}
-                />
-                <span className="text-[11px] font-medium text-tg-hint">{day.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Vertical Divider */}
-          <div className="h-10 w-px bg-tg-secondary shrink-0" />
-
-          {/* Right Status Indicator */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span className="text-xs font-medium text-tg-text/90">
-              Faolligingiz davom etmoqda
+        {/* Tanlangan kun ma'lumoti banneri */}
+        {selectedActivityDay && (
+          <div className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-center justify-between animate-in fade-in">
+            <span className="font-semibold text-tg-text">
+              {selectedActivityDay.date} ({selectedActivityDay.day_label})
+            </span>
+            <span className="text-blue-600 dark:text-blue-400 font-bold">
+              {selectedActivityDay.minutes > 0
+                ? `${selectedActivityDay.minutes} daqiqa (${selectedActivityDay.views_count} dars)`
+                : "Dars ko'rilmagan"}
             </span>
           </div>
+        )}
+
+        {/* Gorizontal suriluvchi kunlar qatori */}
+        <div className="relative">
+          <div
+            ref={activityScrollRef}
+            className="overflow-x-auto pb-2 pt-2 scroll-smooth flex items-end gap-3 sm:gap-4 no-scrollbar select-none"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {dailyActivityList.map((day, idx) => {
+              const isSelected = selectedActivityDay?.date === day.date;
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setSelectedActivityDay(day);
+                  }}
+                  className={`min-w-[34px] sm:min-w-[38px] flex flex-col items-center gap-1.5 cursor-pointer transition-all rounded-2xl p-1 shrink-0 ${
+                    isSelected
+                      ? 'bg-tg-secondary/70 ring-1.5 ring-blue-500/60'
+                      : 'hover:bg-tg-secondary/30'
+                  }`}
+                >
+                  {/* Top daqiqa belgisi */}
+                  <span className="text-[9px] font-bold text-tg-hint/80 h-3 leading-none">
+                    {day.minutes > 0 ? `${day.minutes}m` : ''}
+                  </span>
+
+                  {/* Faollik ustuni */}
+                  <div
+                    className={`w-3.5 sm:w-4 rounded-full transition-all ${day.height} ${
+                      day.is_today && day.active
+                        ? 'bg-gradient-to-t from-blue-600 to-cyan-400 shadow-md shadow-blue-500/30 ring-2 ring-blue-500/40'
+                        : day.active
+                        ? 'bg-blue-600 dark:bg-blue-500 shadow-2xs'
+                        : 'bg-tg-secondary'
+                    }`}
+                  />
+
+                  {/* Kun nomi (Du, Se, Ch...) */}
+                  <span
+                    className={`text-[11px] font-bold ${
+                      day.is_today
+                        ? 'text-blue-600 dark:text-blue-400 font-extrabold'
+                        : 'text-tg-hint'
+                    }`}
+                  >
+                    {day.day_label}
+                  </span>
+
+                  {/* Sana (26.10...) */}
+                  <span className="text-[9px] font-medium text-tg-hint/60 font-mono -mt-0.5">
+                    {day.formatted_date}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Gorizontal surish eslatmasi */}
+        <div className="flex items-center justify-between text-[11px] text-tg-hint pt-0.5 border-t border-tg-secondary/40">
+          <span>👈 O'tgan kunlar</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">Bugun 👉</span>
         </div>
       </div>
 
@@ -927,8 +994,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
             </div>
             <ChevronRight className="w-4 h-4 text-tg-hint/50 group-hover:text-tg-hint group-hover:translate-x-0.5 transition-transform shrink-0" />
           </button>
+
+          {/* Fikr va taklif bildirish (Student Feedback) */}
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              setShowFeedbackModal(true);
+            }}
+            className="w-full bg-tg-section border border-tg-secondary rounded-2xl p-3.5 sm:p-4 flex items-center justify-between hover:border-indigo-500/40 hover:bg-tg-secondary/40 transition-all text-left shadow-xs group cursor-pointer"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-sm text-tg-text truncate">Fikr va taklif bildirish</p>
+                <p className="text-xs text-tg-hint truncate">Platforma yoki darslar bo‘yicha fikringiz</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-tg-hint/50 group-hover:text-tg-hint group-hover:translate-x-0.5 transition-transform shrink-0" />
+          </button>
         </div>
       </div>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+      />
 
       {/* ======================================================== */}
       {/* 7. EDIT PROFILE MODAL (Tahrirlash Modali)               */}

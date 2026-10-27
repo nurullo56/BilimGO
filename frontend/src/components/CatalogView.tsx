@@ -188,9 +188,14 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                   <div className="pt-4 mt-3 border-t border-tg-secondary flex items-center justify-between">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-tg-hint block">
-                        {course.is_enrolled ? 'Holat' : 'Kurs narxi'}
+                        {course.is_waitlist ? 'Kutilmoqda' : course.is_enrolled ? 'Holat' : 'Kurs narxi'}
                       </span>
-                      {course.is_enrolled ? (
+                      {course.is_waitlist ? (
+                        <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          Tez kunda (Waitlist)
+                        </span>
+                      ) : course.is_enrolled ? (
                         <span className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Sotib olingan
@@ -210,9 +215,13 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                         onSelectCourse(course);
                         onNavigate({ type: 'course', courseId: course.id });
                       }}
-                      className="py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      className={`py-2 px-4 rounded-xl active:scale-95 text-white font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                        course.is_waitlist
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-500/20'
+                          : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                      }`}
                     >
-                      <span>Batafsil</span>
+                      <span>{course.is_waitlist ? 'Navbatga yozilish' : 'Batafsil'}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>

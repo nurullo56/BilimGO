@@ -21,6 +21,8 @@ import { ProfileView } from './components/ProfileView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { ApiSettingsModal } from './components/ApiSettingsModal';
 import { NotificationsModal } from './components/NotificationsModal';
+import { FeedbackModal } from './components/FeedbackModal';
+import { fetchNotifications } from './services/api';
 import { ContentProtection } from './components/ContentProtection';
 
 export default function App() {
@@ -28,6 +30,8 @@ export default function App() {
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   // Initialize Telegram WebApp on mount & handle deep link
@@ -38,6 +42,15 @@ export default function App() {
 
     const initialView = parseRouteFromUrl();
     setCurrentView(initialView);
+
+    // Initial unread notifications check
+    fetchNotifications()
+      .then((res) => {
+        if (res && typeof res.unread_count === 'number') {
+          setUnreadNotifCount(res.unread_count);
+        }
+      })
+      .catch((e) => console.warn('Notif count fetch error:', e));
 
     const handleRouteSync = () => {
       const parsed = parseRouteFromUrl();
@@ -146,7 +159,8 @@ export default function App() {
           user={user}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenNotifications={() => setNotificationsOpen(true)}
-          hasUnreadNotifications={true}
+          onOpenFeedback={() => setFeedbackOpen(true)}
+          hasUnreadNotifications={unreadNotifCount > 0}
         />
 
         {/* Main View Router */}
@@ -234,6 +248,13 @@ export default function App() {
         <NotificationsModal
           isOpen={notificationsOpen}
           onClose={() => setNotificationsOpen(false)}
+          onUnreadCountChange={(cnt) => setUnreadNotifCount(cnt)}
+        />
+
+        {/* Feedback Modal */}
+        <FeedbackModal
+          isOpen={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
         />
 
         {/* Settings Modal (Theme, API, Cache) */}
