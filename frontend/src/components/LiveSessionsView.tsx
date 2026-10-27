@@ -225,12 +225,14 @@ export const LiveSessionsView: React.FC<LiveSessionsViewProps> = ({
         ) : sessions.length === 0 ? (
           <div className="p-8 text-center rounded-3xl bg-tg-secondary text-tg-hint space-y-2">
             <Radio className="w-8 h-8 mx-auto opacity-40" />
-            <p className="text-sm font-medium">Jonli darslar mavjud emas</p>
-            <p className="text-xs">Yaqin orada yangi vebinar e'lon qilinadi</p>
+            <p className="text-sm font-medium">Ushbu kurs bo'yicha jonli darslar mavjud emas</p>
+            <p className="text-xs">Yaqin orada mentor tomonidan yangi vebinar e'lon qilinadi</p>
           </div>
         ) : (
           sessions.map((session) => {
             const isLive = session.status === 'live';
+            const isScheduled = session.status === 'scheduled';
+            const isEnded = session.status === 'ended' || session.status === 'cancelled';
 
             return (
               <div
@@ -239,6 +241,8 @@ export const LiveSessionsView: React.FC<LiveSessionsViewProps> = ({
                 className={`p-4 sm:p-5 rounded-3xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                   isLive
                     ? 'bg-tg-section border-rose-500/30 shadow-md ring-1 ring-rose-500/20'
+                    : isEnded
+                    ? 'bg-tg-section/60 border-tg-secondary opacity-75'
                     : 'bg-tg-section border-tg-secondary shadow-xs'
                 }`}
               >
@@ -264,12 +268,14 @@ export const LiveSessionsView: React.FC<LiveSessionsViewProps> = ({
                 <div className="shrink-0 pt-2 sm:pt-0">
                   <button
                     id={`btn-join-live-${session.id}`}
-                    disabled={joining}
-                    onClick={() => handleJoin(session)}
-                    className={`w-full sm:w-auto py-2.5 px-5 rounded-2xl active:scale-95 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    disabled={joining || isEnded}
+                    onClick={() => !isEnded && handleJoin(session)}
+                    className={`w-full sm:w-auto py-2.5 px-5 rounded-2xl active:scale-95 font-extrabold text-xs shadow-md flex items-center justify-center gap-2 transition-all ${
                       isLive
-                        ? 'bg-rose-600 hover:bg-rose-700 ring-2 ring-rose-500/40 animate-pulse'
-                        : 'bg-blue-600 hover:bg-blue-700'
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500/40 animate-pulse cursor-pointer'
+                        : isScheduled
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                        : 'bg-tg-secondary text-tg-hint cursor-not-allowed opacity-60 shadow-none'
                     }`}
                   >
                     {isLive ? (
@@ -277,10 +283,14 @@ export const LiveSessionsView: React.FC<LiveSessionsViewProps> = ({
                         <Radio className="w-4 h-4" />
                         <span>{joining ? 'Ulanmoqda...' : '🔴 Efirga kirish'}</span>
                       </>
-                    ) : (
+                    ) : isScheduled ? (
                       <>
                         <Video className="w-4 h-4" />
                         <span>{joining ? 'Ulanmoqda...' : '🎥 Efir xonasiga kirish'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Efir yakunlangan</span>
                       </>
                     )}
                   </button>

@@ -63,7 +63,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
       ]);
       setCourse(courseData);
       setLessons(lessonsData);
-      setLiveCount(liveData.length);
+      setLiveCount((liveData || []).filter((s: any) => s.status === 'live' || s.status === 'scheduled').length);
       if (wlData) setWaitlistStatus(wlData);
     } catch (err: any) {
       setError(err.message || 'Kurs ma\'lumotlarini yuklashda xatolik');

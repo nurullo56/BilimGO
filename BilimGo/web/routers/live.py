@@ -26,6 +26,18 @@ async def list_upcoming(course_id: int | str) -> list[dict]:
     except ValueError:
         clean_course_id = 1
 
+    # 1. Rejalashtirilgan vaqti o'tib ketgan (3 soatdan oshgan) sessiyalarni avtomatik 'ended' qilish
+    await conn.execute(
+        """
+        UPDATE live_sessions
+        SET status = 'ended', ended_at = datetime('now')
+        WHERE status = 'scheduled'
+          AND datetime(scheduled_at) < datetime('now', '-3 hours')
+        """
+    )
+    await conn.commit()
+
+    # 2. Faqat shu kursga tegishli efirlarni olish (boshqa kurs efirlari aralashib ketmasligi uchun)
     cursor = await conn.execute(
         """
         SELECT ls.id, ls.course_id, ls.scheduled_at, ls.status, ls.join_method, ls.stream_ref,
@@ -34,25 +46,17 @@ async def list_upcoming(course_id: int | str) -> list[dict]:
         LEFT JOIN users u ON u.id = ls.mentor_id
         LEFT JOIN courses c ON c.id = ls.course_id
         WHERE ls.course_id = ?
-        ORDER BY ls.scheduled_at DESC
+        ORDER BY 
+            CASE 
+                WHEN ls.status = 'live' THEN 1
+                WHEN ls.status = 'scheduled' THEN 2
+                ELSE 3
+            END,
+            ls.scheduled_at DESC
         """,
         (clean_course_id,),
     )
     rows = await cursor.fetchall()
-    if not rows:
-        # Also return general upcoming live sessions if none specifically for this course
-        cursor2 = await conn.execute(
-            """
-            SELECT ls.id, ls.course_id, ls.scheduled_at, ls.status, ls.join_method, ls.stream_ref,
-                   u.full_name AS instructor_name, c.title AS course_title
-            FROM live_sessions ls
-            LEFT JOIN users u ON u.id = ls.mentor_id
-            LEFT JOIN courses c ON c.id = ls.course_id
-            ORDER BY ls.scheduled_at DESC
-            LIMIT 5
-            """
-        )
-        rows = await cursor2.fetchall()
 
     return [
         {

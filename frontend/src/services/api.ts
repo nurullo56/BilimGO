@@ -537,7 +537,7 @@ export async function fetchLiveSessions(courseId: string | number): Promise<Live
   return request<LiveSession[]>(
     `/api/live/courses/${cleanId}/sessions`,
     { method: 'GET' },
-    () => mockLiveSessions[String(courseId)] || defaultLiveSessions(courseId)
+    () => mockLiveSessions[`course-${cleanId}`] || []
   );
 }
 

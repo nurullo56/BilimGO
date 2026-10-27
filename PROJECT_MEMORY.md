@@ -139,6 +139,7 @@
 ## ⚙️ Asosiy Modullar va Vazifalari
 <!-- Har bir asosiy fayl yoki modulning vazifasi haqida qisqacha izoh -->
 - `antiflood.py`: AntiFlood (Throttling) middleware. Foydalanuvchilardan kelayotgan tezkor ketma-ket so'rovlarni (spam) cheklaydi (standart: 0.8s). Foydalanuvchini ogohlantiradi, adminlarni cheklovdan ozod qiladi va eski so'rovlarni avtomatik tozalaydi. `main.py` da `dp.update.outer_middleware` sifatida eng birinchi qatlamda ishlaydi.
+- `live.py` (Jonli efirlar): Faqat tanlangan kursga tegishli darslarni qaytaradi (kurslararo aralashib ketish bartaraf etilgan). Rejalashtirilgan vaqti 3 soatdan oshgan eski darslarni avtomatik ravishda `ended` (yakunlangan) holatiga o'tkazadi va UI'da tugagan efirlar nofaol qilib ko'rsatiladi.
 - `lesson_completion_service.py`: Dars ko'rish progressi va bildirishnomalarni boshqaradi. Talaba kursning 1-darsini boshlaganda 1 ta tabrik xabari, eng oxirgi darsini tugatganda 1 ta yakuniy tabrik xabari yuboradi (oraliq darslarda xabar yuborilmaydi). `course_notifications` jadvali orqali parallel so'rovlar (race condition) dan atomik himoyalangan.
 
 ## 🎯 Joriy Holat va Qoidalar
