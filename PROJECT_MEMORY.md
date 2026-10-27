@@ -68,6 +68,10 @@
       - 📄 `0019_course_tariffs.sql`
       - 📄 `0020_mentor_application_payment.sql`
       - 📄 `0021_lesson_quizzes.sql`
+      - 📄 `0022_user_notifications.sql`
+      - 📄 `0023_ai_course_waitlist.sql`
+      - 📄 `0024_student_feedbacks.sql`
+      - 📄 `0025_course_notifications.sql`
     - 📁 **repositories/**
       - 📄 `__init__.py`
       - 📄 `access_grant_repo.py`
@@ -133,7 +137,7 @@
 
 ## ⚙️ Asosiy Modullar va Vazifalari
 <!-- Har bir asosiy fayl yoki modulning vazifasi haqida qisqacha izoh -->
-- `(Loyihadagi asosiy fayllar haqida qisqa izohlar shu yerga yoziladi)`
+- `lesson_completion_service.py`: Dars ko'rish progressi va bildirishnomalarni boshqaradi. Talaba kursning 1-darsini boshlaganda 1 ta tabrik xabari, eng oxirgi darsini tugatganda 1 ta yakuniy tabrik xabari yuboradi (oraliq darslarda xabar yuborilmaydi). `course_notifications` jadvali orqali parallel so'rovlar (race condition) dan atomik himoyalangan.
 
 ## 🎯 Joriy Holat va Qoidalar
 - Kod yozishda to'g'ri UTF-8 va Unicode emojilardan (📦, 🤖, 🎯, 💾, 🛑, ✅) foydalaning.

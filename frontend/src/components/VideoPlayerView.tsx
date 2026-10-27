@@ -80,6 +80,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastReportedTimeRef = useRef<number>(0);
+  const quizSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetchUserProfile().then((p) => setStudentProfile(p)).catch(() => {});
@@ -199,9 +200,15 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
     if (calculatedPercent >= 90 && !isCompleted) {
       setIsCompleted(true);
       triggerHaptic('success');
-      const currIdx = lessons.findIndex((l) => String(l.id) === String(lessonId));
-      if (currIdx !== -1 && currIdx === lessons.length - 1 && lessons.length > 0) {
-        setShowCourseCompletedModal(true);
+      if (quizzes.length > 0) {
+        setTimeout(() => {
+          quizSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 400);
+      } else {
+        const currIdx = lessons.findIndex((l) => String(l.id) === String(lessonId));
+        if (currIdx !== -1 && currIdx === lessons.length - 1 && lessons.length > 0) {
+          setShowCourseCompletedModal(true);
+        }
       }
     }
 
@@ -522,6 +529,12 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
                 if (audioRef.current) {
                   reportProgress(duration, duration, true);
                 }
+                if (quizzes.length > 0) {
+                  triggerHaptic('notification');
+                  setTimeout(() => {
+                    quizSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 400);
+                }
               }}
             />
 
@@ -685,10 +698,17 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
                 const dur = videoRef.current.duration || duration;
                 reportProgress(dur, dur, true);
               }
-              const currIdx = lessons.findIndex((l) => String(l.id) === String(lessonId));
-              if (currIdx !== -1 && currIdx === lessons.length - 1 && lessons.length > 0) {
-                setShowCourseCompletedModal(true);
-                triggerHaptic('success');
+              if (quizzes.length > 0) {
+                triggerHaptic('notification');
+                setTimeout(() => {
+                  quizSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 400);
+              } else {
+                const currIdx = lessons.findIndex((l) => String(l.id) === String(lessonId));
+                if (currIdx !== -1 && currIdx === lessons.length - 1 && lessons.length > 0) {
+                  setShowCourseCompletedModal(true);
+                  triggerHaptic('success');
+                }
               }
             }}
           >
@@ -883,20 +903,43 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
 
       {/* Lesson Quizzes Section */}
       {quizzes.length > 0 && (
-        <div className="space-y-3">
-          {quizzes.map((q) => (
-            <LessonQuizCard
-              key={q.id}
-              quizId={q.id}
-              question={q.question}
-              options={q.options}
-              onComplete={(isCorrect) => {
-                if (isCorrect) {
+        <div ref={quizSectionRef} className="space-y-3 transition-all duration-300">
+          {!isCompleted && progressPercent < 90 ? (
+            <div className="bg-tg-section border border-dashed border-amber-500/30 rounded-3xl p-5 text-center space-y-2 my-4 shadow-sm">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 text-2xl">
+                🔒
+              </div>
+              <h4 className="text-sm font-bold text-tg-text">Dars Testi Qulflangan</h4>
+              <p className="text-xs text-tg-hint max-w-xs mx-auto">
+                Test savollariga javob berish uchun darsni 100% ko'rib chiqing. Video yoki audio tugashi bilan test avtomatik ochiladi!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <div className="bg-gradient-to-r from-blue-600/15 via-emerald-600/15 to-transparent border border-blue-500/30 rounded-2xl p-3.5 flex items-center gap-3 shadow-xs">
+                <span className="text-2xl animate-bounce">🎯</span>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-tg-text">
+                    Dars yakunlandi! Bilimingizni sinab ko'ring
+                  </h4>
+                  <p className="text-[11px] text-tg-hint">
+                    Quyidagi test savoliga to'g'ri javob berib, darsni muvaffaqiyatli yakunlang
+                  </p>
+                </div>
+              </div>
+
+              <LessonQuizCard
+                quizzes={quizzes}
+                onAllComplete={() => {
                   reportProgress(100, 100, true);
-                }
-              }}
-            />
-          ))}
+                  const currIdx = lessons.findIndex((l) => String(l.id) === String(lessonId));
+                  if (currIdx !== -1 && currIdx === lessons.length - 1 && lessons.length > 0) {
+                    setShowCourseCompletedModal(true);
+                  }
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
