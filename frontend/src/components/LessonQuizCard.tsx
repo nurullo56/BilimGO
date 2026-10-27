@@ -29,21 +29,44 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
   const progressPercent = Math.round(((currentIdx + (isSubmitted && isCorrect ? 1 : 0)) / total) * 100);
 
   const handleSelect = (idx: number) => {
-    if (isSubmitted) return;
+    if (isSubmitting || (isSubmitted && isCorrect)) return;
+    // Agar oldingi urinish noto'g'ri bo'lgan bo'lsa, yangi variant tanlanganda darhol xato holatini tozalash
+    if (isSubmitted && !isCorrect) {
+      setIsSubmitted(false);
+      setIsCorrect(null);
+      setExplanation('');
+    }
     triggerHaptic('selection');
     setSelectedIdx(idx);
   };
 
   const handleSubmit = async () => {
-    if (selectedIdx === null || isSubmitted || isSubmitting || !currentQuiz) return;
+    if (selectedIdx === null || isSubmitting || (isSubmitted && isCorrect) || !currentQuiz) return;
     setIsSubmitting(true);
     try {
       const data = await submitQuizAnswer(currentQuiz.id, selectedIdx);
       setIsSubmitted(true);
       setIsCorrect(data.is_correct);
       setExplanation(data.explanation || '');
+
       if (data.is_correct) {
         triggerHaptic('success');
+        // To'g'ri javob bo'lsa, hech qanday ortiqcha tugma bosmasdan 750ms ichida avtomatik keyingi savolga o'tish
+        setTimeout(() => {
+          if (currentIdx + 1 < total) {
+            setCurrentIdx((prev) => prev + 1);
+            setSelectedIdx(null);
+            setIsSubmitted(false);
+            setIsCorrect(null);
+            setExplanation('');
+          } else {
+            setIsAllCompleted(true);
+            triggerHaptic('success');
+            if (onAllComplete) {
+              onAllComplete();
+            }
+          }
+        }, 750);
       } else {
         triggerHaptic('error');
       }
@@ -52,31 +75,6 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
       triggerHaptic('warning');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleRetry = () => {
-    triggerHaptic('light');
-    setSelectedIdx(null);
-    setIsSubmitted(false);
-    setIsCorrect(null);
-    setExplanation('');
-  };
-
-  const handleNext = () => {
-    triggerHaptic('selection');
-    if (currentIdx + 1 < total) {
-      setCurrentIdx((prev) => prev + 1);
-      setSelectedIdx(null);
-      setIsSubmitted(false);
-      setIsCorrect(null);
-      setExplanation('');
-    } else {
-      setIsAllCompleted(true);
-      triggerHaptic('success');
-      if (onAllComplete) {
-        onAllComplete();
-      }
     }
   };
 
@@ -106,13 +104,13 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
       key={currentQuiz.id}
       className="bg-tg-section border border-tg-secondary rounded-3xl p-4 sm:p-5 my-4 shadow-sm animate-in fade-in duration-300"
     >
-      {/* Header: Title and Progress */}
+      {/* Header: Title and Counter */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xl">📝</span>
           <div>
             <h4 className="text-sm sm:text-base font-bold text-tg-text">Dars Testi</h4>
-            <span className="text-[11px] text-tg-hint">To'g'ri javobni tanlang</span>
+            <span className="text-[11px] text-tg-hint">To'g'ri javobni tanlang va tekshiring</span>
           </div>
         </div>
 
@@ -131,7 +129,7 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
         />
       </div>
 
-      {/* Question */}
+      {/* Question Text */}
       <p className="text-tg-text mb-4 text-xs sm:text-sm font-semibold leading-relaxed">
         {currentQuiz.question}
       </p>
@@ -161,7 +159,7 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
               key={idx}
               onClick={() => handleSelect(idx)}
               className={btnClass}
-              disabled={isSubmitted || isSubmitting}
+              disabled={isSubmitting || (isSubmitted && isCorrect === true)}
             >
               <div className="flex items-center gap-3">
                 <span className="w-6 h-6 rounded-lg bg-tg-secondary border border-tg-secondary flex items-center justify-center text-xs font-bold shrink-0">
@@ -174,39 +172,45 @@ export const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
         })}
       </div>
 
-      {/* Submit or Result Action */}
-      {!isSubmitted ? (
-        <button
-          onClick={handleSubmit}
-          disabled={selectedIdx === null || isSubmitting}
-          className="w-full py-2.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-600/20 cursor-pointer"
-        >
-          {isSubmitting ? 'Tekshirilmoqda...' : 'Javobni tasdiqlash'}
-        </button>
-      ) : (
-        <div className={`p-4 rounded-2xl border text-xs sm:text-sm mt-3 ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'}`}>
-          <div className="flex items-center justify-between gap-2 font-bold mb-1">
-            <span>{isCorrect ? "✅ To'g'ri javob! Barakalla!" : "❌ Noto'g'ri javob!"}</span>
-            {!isCorrect ? (
-              <button
-                onClick={handleRetry}
-                className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-600 dark:text-rose-300 text-xs font-bold transition cursor-pointer"
-              >
-                Qayta urinish
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md shadow-emerald-600/20 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
-              >
-                <span>{currentIdx + 1 < total ? 'Keyingi savol' : 'Yakunlash'}</span>
-                <span>➡️</span>
-              </button>
-            )}
+      {/* Noto'g'ri bo'lsa izoh ko'rsatish */}
+      {isSubmitted && !isCorrect && (
+        <div className="p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs mb-3 animate-in fade-in duration-200">
+          <div className="font-bold flex items-center gap-1.5">
+            <span>❌ Noto'g'ri javob!</span>
+            <span className="text-[11px] font-normal text-tg-hint">(boshqa variantni tanlab ko'ring)</span>
           </div>
-          {explanation && <p className="text-xs text-tg-hint mt-2 leading-relaxed">{explanation}</p>}
+          {explanation && <p className="mt-1 leading-relaxed text-tg-hint">{explanation}</p>}
         </div>
       )}
+
+      {/* To'g'ri bo'lsa qisqa yashil izoh */}
+      {isSubmitted && isCorrect && (
+        <div className="p-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs mb-3 animate-in zoom-in-95 duration-200">
+          <div className="font-bold">✅ To'g'ri javob! Barakalla!</div>
+          {explanation && <p className="mt-1 leading-relaxed text-tg-hint">{explanation}</p>}
+        </div>
+      )}
+
+      {/* Yagona Asosiy Tugma (Javobni tanlash -> Tekshirish -> Avtomatik o'tish) */}
+      <button
+        onClick={handleSubmit}
+        disabled={selectedIdx === null || isSubmitting || (isSubmitted && isCorrect === true)}
+        className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+          isSubmitted && isCorrect
+            ? 'bg-emerald-600 text-white shadow-emerald-600/25'
+            : isSubmitted && !isCorrect
+            ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/25'
+            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'
+        }`}
+      >
+        {isSubmitting
+          ? 'Tekshirilmoqda...'
+          : isSubmitted && isCorrect
+          ? '✅ To\'g\'ri! Keyingisi ochilmoqda...'
+          : isSubmitted && !isCorrect
+          ? 'Qayta tekshirish'
+          : 'Tekshirish'}
+      </button>
     </div>
   );
 };
