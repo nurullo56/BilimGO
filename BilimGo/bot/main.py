@@ -25,6 +25,7 @@ from bot.handlers.mentor.live import router as mentor_live_router
 from bot.handlers.student.catalog import router as student_catalog_router
 from bot.handlers.student.progress import router as student_progress_router
 from bot.handlers.student.purchase import router as student_purchase_router
+from bot.middlewares.antiflood import AntiFloodMiddleware
 from bot.middlewares.auth import AuthMiddleware
 from core.config import settings
 from db.database import database
@@ -85,6 +86,7 @@ async def on_shutdown(bot: Bot) -> None:
 
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
+    dp.update.outer_middleware(AntiFloodMiddleware())
     dp.update.middleware(AuthMiddleware())
 
     dp.startup.register(on_startup)
