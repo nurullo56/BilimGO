@@ -11,6 +11,7 @@ from bot.keyboards.admin.menu_kb import (
 )
 from bot.keyboards.admin.broadcast_kb import (
     get_broadcast_target_keyboard,
+    get_broadcast_course_audience_keyboard,
     get_broadcast_mentors_keyboard,
     get_broadcast_mentor_courses_keyboard,
     get_broadcast_confirm_keyboard,
@@ -30,6 +31,7 @@ __all__ = [
     "ADMIN_MENU",
     # broadcast
     "get_broadcast_target_keyboard",
+    "get_broadcast_course_audience_keyboard",
     "get_broadcast_mentors_keyboard",
     "get_broadcast_mentor_courses_keyboard",
     "get_broadcast_confirm_keyboard",

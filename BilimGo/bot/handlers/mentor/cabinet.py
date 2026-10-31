@@ -204,4 +204,7 @@ async def show_mentor_card(message: Message, user: User) -> None:
             f"Kartangiz ulanganda tizim har 10 ta o'quvchi o'qitilganda platforma ulushini avtomatik yechib oladi."
         )
 
-    await message.answer(text)
+    from bot.keyboards.mentor import get_mentor_card_manage_keyboard
+
+    keyboard = get_mentor_card_manage_keyboard()
+    await message.answer(text, reply_markup=keyboard)

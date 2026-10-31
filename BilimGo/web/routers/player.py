@@ -1,8 +1,9 @@
 import logging
+import time
 from pathlib import Path
 import aiofiles
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,9 @@ from db.repositories.access_grant_repo import AccessGrantRepository
 from db.repositories.completion_notification_repo import CompletionNotificationRepository
 from db.repositories.comprehension_check_repo import ComprehensionCheckRepository
 from db.repositories.course_repo import CourseRepository
+from db.repositories.course_tariff_repo import CourseTariffRepository
+from services.course_service import CourseService
+from services.cohort_service import format_course_title_with_cohort
 from db.repositories.daily_unlock_plan_repo import DailyUnlockPlanRepository
 from db.repositories.delivery_token_repo import DeliveryTokenRepository
 from db.repositories.engagement_repo import EngagementRepository, NudgeRepository
@@ -101,12 +105,19 @@ async def list_courses(
         )
         total_duration = sum(l.duration_sec or 0 for l in lessons)
 
+        course_service = CourseService(course_repo=course_repo)
+        cohort = await course_service.get_course_cohort(c, user_id=user.id)
+        formatted_title = format_course_title_with_cohort(c.title, cohort)
+
         results.append(
             {
                 "id": c.id,
-                "title": c.title,
+                "title": formatted_title,
+                "raw_title": c.title,
+                "cohort": cohort,
                 "description": c.description,
                 "base_price": c.base_price,
+                "is_waitlist": bool(c.is_waitlist),
                 "owner_node_id": c.owner_node_id or 1,
                 "has_access": has_access,
                 "is_enrolled": is_enrolled,
@@ -114,6 +125,7 @@ async def list_courses(
                 "completed_lessons": completed_lessons,
                 "total_duration_sec": total_duration,
                 "total_duration_minutes": round(total_duration / 60),
+                "tariffs": await CourseTariffRepository(conn).get_by_course_id(c.id),
             }
         )
     return results
@@ -160,11 +172,18 @@ async def get_course_by_id(
     )
     total_duration = sum(l.duration_sec or 0 for l in lessons)
 
+    course_service = CourseService(course_repo=course_repo)
+    cohort = await course_service.get_course_cohort(c, user_id=user.id)
+    formatted_title = format_course_title_with_cohort(c.title, cohort)
+
     return {
         "id": c.id,
-        "title": c.title,
+        "title": formatted_title,
+        "raw_title": c.title,
+        "cohort": cohort,
         "description": c.description,
         "base_price": c.base_price,
+        "is_waitlist": bool(c.is_waitlist),
         "owner_node_id": c.owner_node_id,
         "has_access": has_access,
         "is_enrolled": is_enrolled,
@@ -172,6 +191,7 @@ async def get_course_by_id(
         "completed_lessons": completed_lessons,
         "total_duration_sec": total_duration,
         "total_duration_minutes": round(total_duration / 60),
+        "tariffs": await CourseTariffRepository(conn).get_by_course_id(c.id),
     }
 
 
@@ -500,6 +520,116 @@ async def update_lesson_progress(
         "lesson_id": lesson_id,
         "is_completed": is_completed,
         "completion_percent": payload.completion_percent,
+    }
+
+
+@router.post("/lessons/{lesson_id}/voice-report")
+async def submit_voice_report(
+    lesson_id: int,
+    voice_file: UploadFile = File(...),
+    duration_sec: int = Form(0),
+    telegram_id: int = Depends(get_current_telegram_id),
+) -> dict:
+    conn = database.conn
+    user_repo = UserRepository(conn)
+    user = await user_repo.get_or_create(telegram_id=telegram_id)
+    lesson_repo = LessonRepository(conn)
+    course_repo = CourseRepository(conn)
+    node_repo = LicenseNodeRepository(conn)
+
+    lesson = await lesson_repo.get_by_id(lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Dars topilmadi")
+
+    course = await course_repo.get_by_id(lesson.course_id)
+    course_title = course.title if course else "Kurs"
+    lesson_title = lesson.title
+
+    # 1. Audio faylni diskda saqlash
+    audio_bytes = await voice_file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Bo'sh audio fayl yuborildi")
+
+    voices_dir = Path("data/voice_reports")
+    voices_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(voice_file.filename or "voice.ogg").suffix or ".ogg"
+    saved_filename = f"voice_{user.id}_{lesson_id}_{int(time.time())}{ext}"
+    saved_path = voices_dir / saved_filename
+    async with aiofiles.open(saved_path, "wb") as f:
+        await f.write(audio_bytes)
+
+    # 2. Ushbu dars bo'yicha biriktirilgan Mentorni aniqlash
+    mentor_tg_id = None
+    if course and course.owner_node_id:
+        node = await node_repo.get_by_id(course.owner_node_id)
+        if node:
+            mentor_user = await user_repo.get_by_id(node.owner_user_id)
+            if mentor_user:
+                mentor_tg_id = mentor_user.telegram_id
+
+    # Agar shaxsiy mentor topilmasa yoki o'quvchining o'zi bo'lsa, super mentor / admin guruhiga yuboriladi
+    if not mentor_tg_id or mentor_tg_id == user.telegram_id:
+        mentor_tg_id = getattr(settings, "super_mentor_group_id", None) or (
+            settings.bot.admin_ids[0] if settings.bot.admin_ids else None
+        )
+
+    # 3. Telegram orqali Mentorga OVOZLI XABAR qilib yetkazish (sendVoice)
+    duration_mins = duration_sec // 60
+    duration_rem = duration_sec % 60
+    duration_str = f"{duration_mins}:{duration_rem:02d}" if duration_sec > 0 else "Noma'lum"
+
+    student_name = user.full_name or "Talaba"
+    caption = (
+        f"🎙 <b>Yangi dars bo'yicha ovozli hisobot!</b>\n\n"
+        f"👤 <b>O'quvchi:</b> {student_name} (ID: <code>{user.telegram_id}</code>)\n"
+        f"📚 <b>Kurs:</b> {course_title}\n"
+        f"📖 <b>Dars:</b> {lesson_title}\n"
+        f"⏱ <b>Davomiyligi:</b> {duration_str}\n\n"
+        f"✅ O'quvchi dars tushunchasi bo'yicha hisobot topshirdi."
+    )
+
+    sent_to_mentor = False
+    if mentor_tg_id:
+        try:
+            bot_token = settings.bot.token
+            url = f"https://api.telegram.org/bot{bot_token}/sendVoice"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    url,
+                    data={"chat_id": mentor_tg_id, "caption": caption, "parse_mode": "HTML"},
+                    files={"voice": (saved_filename, audio_bytes, voice_file.content_type or "audio/ogg")},
+                )
+                if resp.status_code == 200:
+                    sent_to_mentor = True
+                else:
+                    # Agar Telegram sendVoice formatini qabul qilmasa, sendAudio orqali yuborish
+                    audio_url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
+                    resp2 = await client.post(
+                        audio_url,
+                        data={"chat_id": mentor_tg_id, "caption": caption, "parse_mode": "HTML"},
+                        files={"audio": (saved_filename, audio_bytes, voice_file.content_type or "audio/mpeg")},
+                    )
+                    sent_to_mentor = resp2.status_code == 200
+        except Exception as err:
+            logger.error("Mentorga ovoz yuborishda xatolik: %s", err)
+
+    # 4. Ovoz topshirilgach darsni to'liq yakunlangan deb hisoblash
+    lesson_completion_service = LessonCompletionService(
+        lesson_repo=lesson_repo,
+        course_repo=course_repo,
+        user_repo=user_repo,
+        license_node_repo=node_repo,
+        lesson_view_repo=LessonViewRepository(conn),
+        notification_repo=CompletionNotificationRepository(conn),
+        engagement_repo=EngagementRepository(conn),
+        nudge_repo=NudgeRepository(conn),
+    )
+    await lesson_completion_service.handle_lesson_completed(user_id=user.id, lesson_id=lesson_id)
+
+    return {
+        "status": "success",
+        "sent_to_mentor": sent_to_mentor,
+        "message": "Ovozli hisobotingiz qabul qilindi va mentoringizga yetkazildi! Dars muvaffaqiyatli yakunlandi.",
     }
 
 

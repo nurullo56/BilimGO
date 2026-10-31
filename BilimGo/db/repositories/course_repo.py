@@ -15,6 +15,8 @@ class Course:
     base_price: float
     status: str
     description: str | None = None
+    created_at: str | None = None
+    is_waitlist: bool = False
 
     @classmethod
     def from_row(cls, row: aiosqlite.Row) -> Course:
@@ -25,6 +27,8 @@ class Course:
             base_price=row["base_price"],
             status=row["status"],
             description=row["description"] if "description" in row.keys() else None,
+            created_at=row["created_at"] if "created_at" in row.keys() else None,
+            is_waitlist=bool(row["is_waitlist"]) if "is_waitlist" in row.keys() and row["is_waitlist"] is not None else False,
         )
 
 
@@ -38,7 +42,7 @@ class CourseRepository(BaseRepository):
 
     async def list_published(self) -> list[Course]:
         cursor = await self._conn.execute(
-            "SELECT * FROM courses WHERE status = 'published' ORDER BY id DESC"
+            "SELECT * FROM courses WHERE status = 'published' ORDER BY id ASC"
         )
         rows = await cursor.fetchall()
         return [Course.from_row(r) for r in rows]

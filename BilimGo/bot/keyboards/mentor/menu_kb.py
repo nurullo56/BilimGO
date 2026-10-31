@@ -50,3 +50,17 @@ def get_mentor_inline_webapp(webapp_url: str | None = None) -> InlineKeyboardMar
 
 
 MENTOR_MENU = get_mentor_menu()
+
+
+def get_mentor_card_manage_keyboard(webapp_url: str | None = None) -> InlineKeyboardMarkup:
+    url = webapp_url or settings.webapp.base_url
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💳 Karta ulash / boshqarish (Mini App)",
+                    web_app=WebAppInfo(url=f"{url}/?view=profile#profile"),
+                )
+            ]
+        ]
+    )

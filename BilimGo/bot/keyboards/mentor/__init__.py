@@ -6,6 +6,7 @@ Re-exports all mentor keyboard functions for backward compatibility.
 from bot.keyboards.mentor.menu_kb import (
     get_mentor_menu,
     get_mentor_inline_webapp,
+    get_mentor_card_manage_keyboard,
     MENTOR_MENU,
 )
 from bot.keyboards.mentor.broadcast_kb import (
@@ -22,6 +23,7 @@ __all__ = [
     # menu
     "get_mentor_menu",
     "get_mentor_inline_webapp",
+    "get_mentor_card_manage_keyboard",
     "MENTOR_MENU",
     # broadcast
     "get_mentor_broadcast_target_keyboard",

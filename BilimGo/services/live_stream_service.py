@@ -153,14 +153,17 @@ class LiveStreamManager:
 
         # DB ga yozish
         repo = LiveSessionRepository(database.conn)
-        await repo.create(
+        db_id = await repo.create(
             course_id=course_id,
             mentor_id=mentor_id,
             scheduled_at=session_data["scheduled_at"],
-            session_id=session_id,
             title=title,
             description=description,
         )
+
+        session_id = str(db_id)
+        session_data["id"] = session_id
+        session_data["stream_url"] = f"{settings.webapp.base_url}/live/{session_id}"
 
         # Xotirada saqlash
         self._sessions[session_id] = session_data

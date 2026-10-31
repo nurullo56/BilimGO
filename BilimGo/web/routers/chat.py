@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from core.exceptions import AccessDeniedError
 from db.database import database
 from db.repositories.chat_repo import ChatRepository
+from services.messaging_service import MessagingService
 from db.repositories.user_repo import UserRepository
 from web.dependencies.auth import get_current_telegram_id
 
@@ -88,19 +89,15 @@ async def send_message(
     if not body.content.strip():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Xabar matni bo'sh bo'lishi mumkin emas")
 
-    cursor = await conn.execute(
-        "INSERT INTO chat_messages (room_id, sender_id, content) VALUES (?, ?, ?) RETURNING id, sent_at",
-        (actual_room_id, user.id, body.content.strip()),
-    )
-    msg_row = await cursor.fetchone()
-    await conn.commit()
+    messaging_service = MessagingService(ChatRepository(conn))
+    msg = await messaging_service.send_message(actual_room_id, user.id, body.content.strip())
 
     return MessageOut(
-        id=msg_row["id"],
+        id=msg.id,
         sender_id=user.id,
         sender_name=user.full_name or "Men",
-        content=body.content.strip(),
-        sent_at=msg_row["sent_at"],
+        content=msg.content,
+        sent_at=msg.sent_at,
         is_me=True,
         role=user.role or "student",
         reply_to=body.reply_to,

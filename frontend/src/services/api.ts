@@ -290,15 +290,20 @@ export async function updateLessonProgress(
 export async function initiatePurchase(
   courseId: string | number,
   ownerNodeId: string | number,
-  provider: 'click' | 'payme'
+  provider: 'click' | 'payme',
+  tariffId?: number
 ): Promise<PurchaseInitiateResponse> {
   const cleanCourseId = cleanNumericId(courseId);
   const cleanNodeId = cleanNumericId(ownerNodeId);
-  const query = new URLSearchParams({
+  const params: Record<string, string> = {
     course_id: String(cleanCourseId),
     license_node_id: String(cleanNodeId),
     provider,
-  });
+  };
+  if (tariffId) {
+    params.tariff_id = String(tariffId);
+  }
+  const query = new URLSearchParams(params);
 
   return request<PurchaseInitiateResponse>(
     `/api/payments/purchase/initiate?${query.toString()}`,
@@ -1680,4 +1685,62 @@ export async function fetchMyFeedbacks(): Promise<any[]> {
     { method: 'GET' },
     () => []
   );
+}
+
+export interface AdminFeedbackItem {
+  id: number;
+  user_id: number;
+  telegram_id: number;
+  full_name: string | null;
+  course_id: number | null;
+  course_title: string | null;
+  lesson_id: number | null;
+  lesson_title: string | null;
+  rating: number;
+  category: string;
+  comment: string;
+  created_at: string;
+}
+
+export async function fetchAdminFeedbacks(): Promise<AdminFeedbackItem[]> {
+  return request<AdminFeedbackItem[]>(
+    '/api/feedback/admin/all',
+    { method: 'GET' },
+    () => []
+  );
+}
+
+// ==========================================
+// 31. SUBMIT VOICE REPORT TO MENTOR
+// ==========================================
+export async function submitVoiceReport(
+  lessonId: string | number,
+  audioBlob: Blob,
+  durationSec: number
+): Promise<{ status: string; sent_to_mentor: boolean; message: string }> {
+  const cleanId = cleanNumericId(lessonId);
+  const formData = new FormData();
+  formData.append('voice_file', audioBlob, `voice_report_${cleanId}.ogg`);
+  formData.append('duration_sec', String(Math.round(durationSec)));
+
+  const url = `${customApiBase}/api/lessons/${cleanId}/voice-report`;
+  const initData = getTelegramInitData();
+  const user = getTelegramUser();
+
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-Init-Data'] = initData;
+  if (user?.id) headers['X-Telegram-User-Id'] = String(user.id);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Ovozli xabarni yuborishda xatolik yuz berdi");
+  }
+
+  return await res.json();
 }

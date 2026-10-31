@@ -19,6 +19,12 @@ def _require(key: str) -> str:
 class BotConfig:
     token: str
     admin_ids: tuple[int, ...]
+    group_id: int | None = None
+    topic_mentor_apps: int = 2
+    topic_payment_receipts: int = 4
+    topic_statistics: int = 8
+    topic_users: int = 6
+    topic_system_alerts: int = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +141,14 @@ def load_settings() -> Settings:
         bot=BotConfig(
             token=_require("BOT_TOKEN"),
             admin_ids=admin_ids,
+            group_id=int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
+            if os.getenv("SUPER_MENTOR_GROUP_ID")
+            else None,
+            topic_mentor_apps=int(os.getenv("MENTOR_APPLICATIONS_TOPIC_ID", "2")),
+            topic_payment_receipts=int(os.getenv("PAYMENT_RECEIPTS_TOPIC_ID", "4")),
+            topic_statistics=int(os.getenv("STATISTICS_TOPIC_ID", "8")),
+            topic_users=int(os.getenv("USERS_TOPIC_ID", "6")),
+            topic_system_alerts=int(os.getenv("SYSTEM_ALERTS_TOPIC_ID", "10")),
         ),
         db=DatabaseConfig(
             path=BASE_DIR / os.getenv("DB_PATH", "data/bilimgo.db"),

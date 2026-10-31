@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.mentor_kb import (
+from bot.keyboards.mentor import (
     get_mentor_broadcast_cancel_keyboard,
     get_mentor_broadcast_confirm_keyboard,
     get_mentor_broadcast_target_keyboard,

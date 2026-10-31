@@ -7,13 +7,13 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.admin_kb import (
+from bot.keyboards.admin import (
     ADMIN_MENU,
     get_quota_amount_keyboard,
     get_quota_courses_keyboard,
     get_quota_mentors_keyboard,
 )
-from bot.keyboards.mentor_kb import get_mentor_inline_webapp
+from bot.keyboards.mentor import get_mentor_inline_webapp
 from bot.states.fsm_states import AddQuotaStates
 from core.config import settings
 from db.database import database

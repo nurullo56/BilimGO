@@ -3,7 +3,7 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import Message
 
-from bot.keyboards.common_kb import get_cabinets_keyboard
+from bot.keyboards.common import get_cabinets_keyboard
 from db.database import database
 from db.repositories.cabinet_repo import CabinetRepository
 from db.repositories.user_repo import User

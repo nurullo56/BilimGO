@@ -11,6 +11,7 @@ from db.repositories.access_grant_repo import AccessGrantRepository
 from db.repositories.lesson_view_repo import LessonViewRepository
 from db.repositories.license_node_repo import LicenseNodeRepository
 from db.repositories.user_repo import UserRepository
+from services.admin_notifier import admin_notifier
 from web.dependencies.auth import get_current_telegram_id
 
 logger = logging.getLogger(__name__)
@@ -488,41 +489,17 @@ async def create_mentor_application(
         f"⚡️ <i>Iltimos, arizani ko'rib chiqing va tasdiqlang.</i>"
     )
 
-    async def _send_admin_alerts():
-        bot_token = settings.bot.token
-        if not bot_token:
-            return
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # SuperMentor guruhidagi '🎓Mentorlik arizalari' mavzusiga (Topic 2) xabarnoma
-            group_id = int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
-            topic_id = int(os.getenv("MENTOR_APPLICATIONS_TOPIC_ID", "2"))
-            if group_id:
-                try:
-                    payload_data = {
-                        "chat_id": group_id,
-                        "text": admin_notify_text,
-                        "parse_mode": "HTML",
-                    }
-                    if topic_id:
-                        payload_data["message_thread_id"] = topic_id
-                    payload_data["reply_markup"] = {
-                        "inline_keyboard": [
-                            [
-                                {"text": "✅ Tasdiqlash", "callback_data": f"mentor_app:approve:{app_id}"},
-                                {"text": "❌ Rad etish", "callback_data": f"mentor_app:reject:{app_id}"},
-                            ]
-                        ]
-                    }
-                    res = await client.post(
-                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                        json=payload_data,
-                    )
-                    logger.info("Mentorlik arizasi guruhga (%s topic %s) yuborildi: %s", group_id, topic_id, res.status_code)
-                except Exception as ex:
-                    logger.warning("Guruhga xabar yuborishda xatolik: %s", ex)
-
+    # Mentor arizasi xabarnomasi (Topic 2: Mentorlik arizalari)
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {"text": "✅ Tasdiqlash", "callback_data": f"mentor_app:approve:{app_id}"},
+                {"text": "❌ Rad etish", "callback_data": f"mentor_app:reject:{app_id}"},
+            ]
+        ]
+    }
     import asyncio
-    asyncio.create_task(_send_admin_alerts())
+    asyncio.create_task(admin_notifier.send_mentor_application(admin_notify_text, reply_markup=reply_markup))
 
     return {
         "success": True,
@@ -613,41 +590,21 @@ async def submit_mentor_application_receipt(
         f"⚡️ <i>Iltimos, to'lovni tekshirib arizani tasdiqlang.</i>"
     )
 
-    async def _send_receipt_alerts():
-        bot_token = settings.bot.token
-        if not bot_token:
-            return
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # SuperMentor guruhidagi '💳To‘lovlar va cheklar' mavzusiga (Topic 4) xabarnoma
-            group_id = int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
-            topic_id = int(os.getenv("PAYMENT_RECEIPTS_TOPIC_ID", "4"))
-            if group_id:
-                try:
-                    payload_data = {
-                        "chat_id": group_id,
-                        "text": receipt_notify_text,
-                        "parse_mode": "HTML",
-                    }
-                    if topic_id:
-                        payload_data["message_thread_id"] = topic_id
-                    payload_data["reply_markup"] = {
-                        "inline_keyboard": [
-                            [
-                                {"text": "✅ Chekni tasdiqlash", "callback_data": f"mentor_receipt:approve:{payload.application_id}"},
-                                {"text": "❌ Rad etish", "callback_data": f"mentor_receipt:reject:{payload.application_id}"},
-                            ]
-                        ]
-                    }
-                    res = await client.post(
-                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                        json=payload_data,
-                    )
-                    logger.info("To'lov cheki guruhga (%s topic %s) yuborildi: %s", group_id, topic_id, res.status_code)
-                except Exception as ex:
-                    logger.warning("Guruhga chek xabarnomasini yuborishda xatolik: %s", ex)
-
+    # Chek xabarnomasi (Topic 4: To'lovlar va cheklar)
+    receipt_markup = {
+        "inline_keyboard": [
+            [
+                {"text": "✅ Chekni tasdiqlash", "callback_data": f"mentor_receipt:approve:{payload.application_id}"},
+                {"text": "❌ Rad etish", "callback_data": f"mentor_receipt:reject:{payload.application_id}"},
+            ]
+        ]
+    }
     import asyncio
-    asyncio.create_task(_send_receipt_alerts())
+    asyncio.create_task(
+        admin_notifier.send_payment_receipt(
+            payload.receipt_photo_id, receipt_notify_text, reply_markup=receipt_markup
+        )
+    )
 
     return {
         "success": True,

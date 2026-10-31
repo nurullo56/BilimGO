@@ -1,3 +1,16 @@
+export interface CourseTariff {
+  id: number;
+  course_id: number;
+  tier_code: string;
+  name: string;
+  price: number;
+  tagline?: string;
+  features?: string[];
+  is_popular?: boolean | number;
+  has_chat?: boolean | number;
+  has_live?: boolean | number;
+}
+
 export interface Course {
   id: string | number;
   title: string;
@@ -12,6 +25,7 @@ export interface Course {
   is_enrolled?: boolean;
   has_access?: boolean;
   is_waitlist?: boolean;
+  tariffs?: CourseTariff[];
 }
 
 export interface Lesson {

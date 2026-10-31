@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from bot.handlers.common._utils import _ROLE_LABELS
-from bot.keyboards.common_kb import get_catalog_webapp_keyboard, get_profile_webapp_keyboard
+from bot.keyboards.common import get_catalog_webapp_keyboard, get_profile_webapp_keyboard
 from core.config import settings
 from db.database import database
 from db.repositories.course_repo import CourseRepository

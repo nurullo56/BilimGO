@@ -49,7 +49,26 @@ async def get_courses_and_counts() -> tuple[list[dict], dict[str, int]]:
             (cid, cid),
         )
         r_crs = await c_crs.fetchone()
-        counts[f"course_{cid}"] = r_crs["cnt"] if r_crs else 0
+        all_cnt = r_crs["cnt"] if r_crs else 0
+        counts[f"course_{cid}"] = all_cnt
+        counts[f"course_all_{cid}"] = all_cnt
+
+        c_std = await conn.execute(
+            """
+            SELECT COUNT(DISTINCT u.telegram_id) as cnt
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL AND u.status = 'active'
+              AND (u.role IS NULL OR u.role NOT IN ('mentor', 'super_mentor', 'admin'))
+              AND u.id IN (
+                SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                UNION
+                SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+            )
+            """,
+            (cid, cid),
+        )
+        r_std = await c_std.fetchone()
+        counts[f"course_students_{cid}"] = r_std["cnt"] if r_std else 0
 
     return courses, counts
 
@@ -232,9 +251,34 @@ async def get_target_user_ids(target: str) -> list[int]:
             logger.error("Target user ids (mentor all) olishda xato (%s): %s", target, e)
             return []
 
-    elif target.startswith("course_"):
+    elif target.startswith("course_students_"):
         try:
-            cid = int(target.replace("course_", ""))
+            cid = int(target.replace("course_students_", ""))
+            cursor = await conn.execute(
+                """
+                SELECT DISTINCT u.telegram_id
+                FROM users u
+                WHERE u.telegram_id IS NOT NULL 
+                  AND u.status = 'active'
+                  AND (u.role IS NULL OR u.role NOT IN ('mentor', 'super_mentor', 'admin'))
+                  AND u.id IN (
+                    SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                    UNION
+                    SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+                )
+                """,
+                (cid, cid),
+            )
+            rows = await cursor.fetchall()
+            return [r["telegram_id"] for r in rows if r["telegram_id"]]
+        except Exception as e:
+            logger.error("Target user ids (course students) olishda xato (%s): %s", target, e)
+            return []
+
+    elif target.startswith("course_all_") or target.startswith("course_"):
+        try:
+            raw = target.replace("course_all_", "").replace("course_", "")
+            cid = int(raw)
             cursor = await conn.execute(
                 """
                 SELECT DISTINCT u.telegram_id

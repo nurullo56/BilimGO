@@ -16,14 +16,14 @@ from bot.handlers.common._utils import (
     _notify_super_mentors_about_mentor_activation,
     _parse_payload,
 )
-from bot.keyboards.admin_kb import ADMIN_MENU, get_admin_inline_webapp
-from bot.keyboards.common_kb import (
+from bot.keyboards.admin import ADMIN_MENU, get_admin_inline_webapp
+from bot.keyboards.common import (
     get_catalog_webapp_keyboard,
     get_direct_course_keyboard,
     get_profile_webapp_keyboard,
 )
-from bot.keyboards.mentor_kb import MENTOR_MENU, get_mentor_inline_webapp
-from bot.keyboards.student_kb import PHONE_REQUEST_KEYBOARD, STUDENT_MENU, get_student_inline_webapp
+from bot.keyboards.mentor import MENTOR_MENU, get_mentor_inline_webapp
+from bot.keyboards.student import PHONE_REQUEST_KEYBOARD, STUDENT_MENU, get_student_inline_webapp
 from core.config import settings
 from db.database import database
 from db.repositories.cabinet_repo import CabinetRepository
@@ -31,6 +31,7 @@ from db.repositories.chat_repo import ChatRepository
 from db.repositories.course_repo import CourseRepository
 from db.repositories.license_node_repo import LicenseNodeRepository
 from db.repositories.user_repo import User, UserRepository
+from services.admin_notifier import AdminNotifier
 from services.cabinet_service import CabinetService
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,31 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
     if not user.phone:
         if payload:
             await state.update_data(referral_payload=payload)
+
+        target_cid, target_nid, _, _ = _parse_payload(payload)
+        is_konkurs = False
+        if target_cid == 3 or (payload and any(k in payload.lower() for k in ("konkurs", "aksiya"))):
+            is_konkurs = True
+        elif target_nid:
+            node_row = await license_node_repo.get_by_id(target_nid)
+            if node_row and node_row.course_id == 3:
+                is_konkurs = True
+
+        if is_konkurs:
+            await message.answer(
+                f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
+                "⚠️ <b>DIQQAT: KONKURS KURSI VA BOTI UCHUN QAT'IY SHART!</b> ⚠️\n\n"
+                "1️⃣ <b>Telegram Akkaunt va Raqam:</b>\n"
+                "Konkurs boti, unga kirish huquqlari va barcha imkoniyatlar <b>aynan hozir siz BilimGo botiga kirib turgan Telegram akkauntingiz va unga ulangan telefon raqamingizga</b> biriktiriladi!\n\n"
+                "2️⃣ <b>Qat'iy qoida:</b>\n"
+                "Keyinchalik <i>«Men boshqa akkauntimga olmoqchi edim»</i> yoki <i>«Boshqa raqamimga o'tkazib bering»</i> kabi e'tirozlar <b>mutlaqo qabul qilinmaydi va tan olinmaydi!</b>\n\n"
+                "3️⃣ <b>Faol va ishlaydigan akkaunt:</b>\n"
+                "Ushbu Telegram akkaunt o'zingiz doimiy ishlatadigan, faol raqamingiz bo'lishi shart. Agar bu boshqa akkaunt bo'lsa, <b>hoziroq o'zingizning haqiqiy ishlaydigan akkauntingizdan kiring!</b>\n\n"
+                "✅ <i>Agar aynan shu akkauntingizdan qatnashishga rozi bo'lsangiz, davom etish uchun pastdagi tugmani bosing:</i> 👇",
+                reply_markup=PHONE_REQUEST_KEYBOARD,
+            )
+            return
+
         await message.answer(
             f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
             "🎓 <b>BilimGo</b> adaptiv ta'lim platformasiga xush kelibsiz.\n\n"
@@ -146,14 +172,28 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
         inline_kb = get_student_inline_webapp()
 
     if target_course:
-        await message.answer(
-            f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
-            f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
-            "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
-            f"{mentor_info}\n"
-            "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
-            reply_markup=get_direct_course_keyboard(target_course.id),
-        )
+        is_konkurs = target_course.id == 3 or "konkurs" in target_course.title.lower() or "aksiya" in target_course.title.lower()
+        if is_konkurs:
+            await message.answer(
+                f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
+                "⚠️ <b>DIQQAT: KONKURS KURSI VA BOTI UCHUN QAT'IY SHART!</b> ⚠️\n\n"
+                f"1️⃣ Konkurs boti va barcha kirish imtiyozlari <b>aynan sizning ushbu Telegram akkauntingiz (ID: <code>{user.telegram_id}</code>) va telefon raqamingizga (<code>{user.phone}</code>)</b> biriktirildi!\n"
+                "2️⃣ Keyinchalik <i>«Men boshqa akkauntimga olmoqchi edim»</i> yoki <i>«Boshqa raqamimga o'tkazib bering»</i> degan murojaatlar <b>mutlaqo qabul qilinmaydi va tan olinmaydi!</b>\n\n"
+                f"🎉 Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
+                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                f"{mentor_info}\n"
+                "Darslarni boshlash uchun quyidagi tugmani bosing 👇",
+                reply_markup=get_direct_course_keyboard(target_course.id),
+            )
+        else:
+            await message.answer(
+                f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
+                f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
+                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                f"{mentor_info}\n"
+                "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
+                reply_markup=get_direct_course_keyboard(target_course.id),
+            )
         await message.answer("Quyidagi menyu orqali tezkor boshqarishingiz mumkin 👇", reply_markup=keyboard)
         return
 
@@ -200,6 +240,20 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
         bot, user, referral_payload, from_tg_user=message.from_user
     )
 
+    # 🔔 Adminga yangi a'zo haqida xabarnoma (Topic 8: Mentorlar va o'quvchilar)
+    try:
+        new_user_text = (
+            f"👤 <b>Yangi foydalanuvchi ro'yxatdan o'tdi!</b>\n\n"
+            f"🏷 <b>F.I.SH:</b> {full_name}\n"
+            f"📱 <b>Telefon:</b> <code>{phone_number}</code>\n"
+            f"💬 <b>Telegram:</b> @{message.from_user.username or 'mavjud emas'} (ID: <code>{user.telegram_id}</code>)\n"
+            f"🎭 <b>Roli:</b> {user.role.title()}"
+        )
+        notifier = AdminNotifier(bot)
+        await notifier.send_user_alert(new_user_text)
+    except Exception as ex:
+        logger.debug("Yangi a'zo xabarnomasini yuborishda xatolik: %s", ex)
+
     if user.role == "mentor":
         cursor = await conn.execute(
             "SELECT id FROM license_nodes WHERE owner_user_id = ? LIMIT 1", (user.id,)
@@ -224,15 +278,29 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
         keyboard = STUDENT_MENU
 
     if target_course:
-        await message.answer(
-            f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"
-            f"📱 Raqam: <code>{phone_number}</code>\n"
-            f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
-            "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
-            f"{mentor_info}\n"
-            "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
-            reply_markup=get_direct_course_keyboard(target_course.id),
-        )
+        is_konkurs = target_course.id == 3 or "konkurs" in target_course.title.lower() or "aksiya" in target_course.title.lower()
+        if is_konkurs:
+            await message.answer(
+                f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"
+                f"📱 Raqam: <code>{phone_number}</code>\n"
+                f"👤 Telegram ID: <code>{user.telegram_id}</code>\n\n"
+                f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
+                "⚠️ <b>Qat'iy shart eslatmasi:</b> Konkurs boti va barcha kirish imtiyozlari faqat ushbu Telegram akkaunt (<code>{user.telegram_id}</code>) va telefon raqamingiz (<code>{phone_number}</code>) uchun taqdim etiladi. Boshqa akkauntga o'tkazib berilmaydi!\n\n"
+                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                f"{mentor_info}\n"
+                "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
+                reply_markup=get_direct_course_keyboard(target_course.id),
+            )
+        else:
+            await message.answer(
+                f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"
+                f"📱 Raqam: <code>{phone_number}</code>\n"
+                f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
+                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                f"{mentor_info}\n"
+                "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
+                reply_markup=get_direct_course_keyboard(target_course.id),
+            )
     else:
         await message.answer(
             f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"

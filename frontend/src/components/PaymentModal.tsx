@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { CheckCircle2, CreditCard, ShieldCheck, X, AlertCircle, Send } from 'lucide-react';
-import { Course } from '../types';
+import { CheckCircle2, CreditCard, ShieldCheck, X, AlertCircle, Send, Sparkles } from 'lucide-react';
+import { Course, CourseTariff } from '../types';
 import { initiatePurchase } from '../services/api';
 import { triggerHaptic } from '../services/telegram';
 
 interface PaymentModalProps {
   course: Course;
+  selectedTariff?: CourseTariff | null;
   isOpen: boolean;
   onClose: () => void;
   onSuccessEnrolled?: () => void;
@@ -13,6 +14,7 @@ interface PaymentModalProps {
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
   course,
+  selectedTariff,
   isOpen,
   onClose,
   onSuccessEnrolled,
@@ -24,12 +26,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!isOpen) return null;
 
+  const effectivePrice = selectedTariff ? selectedTariff.price : course.base_price;
+  const formattedPrice = new Intl.NumberFormat('uz-UZ').format(effectivePrice);
+
   const handlePurchase = async () => {
     triggerHaptic('medium');
     setLoading(true);
     setError(null);
     try {
-      const res = await initiatePurchase(course.id, course.owner_node_id, provider);
+      const res = await initiatePurchase(course.id, course.owner_node_id, provider, selectedTariff?.id);
       triggerHaptic('success');
       setSuccessData(res);
       if (onSuccessEnrolled) {
@@ -42,8 +47,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       setLoading(false);
     }
   };
-
-  const formattedPrice = new Intl.NumberFormat('uz-UZ').format(course.base_price);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -94,6 +97,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   {course.title}
                 </span>
               </div>
+              {selectedTariff && (
+                <div className="flex justify-between items-center">
+                  <span className="text-tg-hint">Tanlangan tarif:</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
+                    {selectedTariff.name}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-tg-hint">To'lov raqami (Sale ID):</span>
                 <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -131,15 +142,27 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         ) : (
           <div className="py-4 space-y-5">
-            {/* Course mini preview */}
+            {/* Course & Tariff mini preview */}
             <div className="bg-tg-secondary p-3.5 rounded-2xl flex items-center justify-between border border-tg-secondary">
               <div className="flex-1 pr-3">
-                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  Tanlangan kurs
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                    Tanlangan kurs
+                  </span>
+                  {selectedTariff && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                      {selectedTariff.name}
+                    </span>
+                  )}
+                </div>
                 <h4 className="font-bold text-sm text-tg-text line-clamp-2 mt-0.5">
                   {course.title}
                 </h4>
+                {selectedTariff?.tagline && (
+                  <p className="text-[11px] text-tg-hint line-clamp-1 mt-0.5">
+                    {selectedTariff.tagline}
+                  </p>
+                )}
               </div>
               <div className="text-right shrink-0">
                 <span className="text-xs text-tg-hint block">Narxi</span>
@@ -152,7 +175,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             {/* Provider selection */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-tg-text block">
-                To'lov usulini tanlang:
+                To'lov tizimini tanlang:
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {/* Click */}
@@ -162,17 +185,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     triggerHaptic('selection');
                     setProvider('click');
                   }}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     provider === 'click'
-                      ? 'border-blue-600 bg-blue-500/10 shadow-xs'
+                      ? 'border-blue-500 bg-blue-500/10 shadow-xs ring-2 ring-blue-500/20'
                       : 'border-tg-secondary bg-tg-secondary hover:bg-tg-secondary/80'
                   }`}
                 >
-                  <div className="font-black tracking-tight text-blue-500 text-lg">
-                    CLICK
+                  <div className="h-9 w-full flex items-center justify-center">
+                    <img
+                      src="/images/click.png"
+                      alt="Click"
+                      className="h-8 max-h-8 max-w-[110px] object-contain"
+                    />
                   </div>
-                  <span className="text-[11px] font-medium text-tg-hint">
-                    Click Up / USSD / Web
+                  <span className="text-[11px] font-semibold text-tg-hint">
+                    Click Up / Web
                   </span>
                 </button>
 
@@ -183,16 +210,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     triggerHaptic('selection');
                     setProvider('payme');
                   }}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     provider === 'payme'
-                      ? 'border-teal-500 bg-teal-500/10 shadow-xs'
+                      ? 'border-teal-500 bg-teal-500/10 shadow-xs ring-2 ring-teal-500/20'
                       : 'border-tg-secondary bg-tg-secondary hover:bg-tg-secondary/80'
                   }`}
                 >
-                  <div className="font-black tracking-tight text-teal-500 text-lg">
-                    Payme
+                  <div className="h-9 w-full flex items-center justify-center">
+                    <img
+                      src="/images/payme.png"
+                      alt="Payme"
+                      className="h-8 max-h-8 max-w-[110px] object-contain"
+                    />
                   </div>
-                  <span className="text-[11px] font-medium text-tg-hint">
+                  <span className="text-[11px] font-semibold text-tg-hint">
                     Payme Card / App
                   </span>
                 </button>
@@ -208,7 +239,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             <div className="flex items-center gap-2 text-xs text-tg-hint">
               <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Xavfsiz tranzaksiya & adaptiv dars ochilish kafolati</span>
+              <span>Xavfsiz to'lov & darslarni darhol avtomatik ochish kafolati</span>
             </div>
 
             <button
@@ -221,7 +252,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>To'lov so'rovini yuborish ({formattedPrice} so'm)</span>
+                  <CreditCard className="w-4 h-4" />
+                  <span>
+                    To'lov so'rovini yuborish ({formattedPrice} so'm)
+                  </span>
                 </>
               )}
             </button>

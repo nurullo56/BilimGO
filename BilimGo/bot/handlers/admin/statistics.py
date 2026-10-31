@@ -11,7 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.handlers.admin._admin_db import get_courses_and_counts
-from bot.keyboards.admin_kb import ADMIN_MENU, get_admin_panel_keyboard
+from bot.keyboards.admin import ADMIN_MENU, get_admin_panel_keyboard
 from core.config import settings
 
 logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.admin_kb import (
+from bot.keyboards.admin import (
     ADMIN_MENU,
     get_admin_panel_keyboard,
     get_broadcast_cancel_keyboard,
@@ -20,6 +20,7 @@ from bot.keyboards.admin_kb import (
     get_broadcast_mentor_courses_keyboard,
     get_broadcast_mentors_keyboard,
     get_broadcast_target_keyboard,
+    get_broadcast_course_audience_keyboard,
 )
 from bot.states.fsm_states import BroadcastStates
 from core.config import settings
@@ -60,7 +61,26 @@ async def _get_courses_and_counts() -> tuple[list[dict], dict[str, int]]:
             (cid, cid),
         )
         r_crs = await c_crs.fetchone()
-        counts[f"course_{cid}"] = r_crs["cnt"] if r_crs else 0
+        all_cnt = r_crs["cnt"] if r_crs else 0
+        counts[f"course_{cid}"] = all_cnt
+        counts[f"course_all_{cid}"] = all_cnt
+
+        c_std = await conn.execute(
+            """
+            SELECT COUNT(DISTINCT u.telegram_id) as cnt
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL AND u.status = 'active'
+              AND (u.role IS NULL OR u.role NOT IN ('mentor', 'super_mentor', 'admin'))
+              AND u.id IN (
+                SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                UNION
+                SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+            )
+            """,
+            (cid, cid),
+        )
+        r_std = await c_std.fetchone()
+        counts[f"course_students_{cid}"] = r_std["cnt"] if r_std else 0
         
     return courses, counts
 
@@ -248,9 +268,34 @@ async def _get_target_user_ids(target: str) -> list[int]:
             logger.error("Target user ids (mentor all) olishda xato (%s): %s", target, e)
             return []
 
-    elif target.startswith("course_"):
+    elif target.startswith("course_students_"):
         try:
-            cid = int(target.replace("course_", ""))
+            cid = int(target.replace("course_students_", ""))
+            cursor = await conn.execute(
+                """
+                SELECT DISTINCT u.telegram_id
+                FROM users u
+                WHERE u.telegram_id IS NOT NULL 
+                  AND u.status = 'active'
+                  AND (u.role IS NULL OR u.role NOT IN ('mentor', 'super_mentor', 'admin'))
+                  AND u.id IN (
+                    SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                    UNION
+                    SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+                )
+                """,
+                (cid, cid),
+            )
+            rows = await cursor.fetchall()
+            return [r["telegram_id"] for r in rows if r["telegram_id"]]
+        except Exception as e:
+            logger.error("Target user ids (course students) olishda xato (%s): %s", target, e)
+            return []
+
+    elif target.startswith("course_all_") or target.startswith("course_"):
+        try:
+            raw = target.replace("course_all_", "").replace("course_", "")
+            cid = int(raw)
             cursor = await conn.execute(
                 """
                 SELECT DISTINCT u.telegram_id
@@ -462,6 +507,36 @@ async def process_mentor_selected(callback: CallbackQuery, state: FSMContext) ->
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("bcast_course_choose:"))
+async def process_course_choose(callback: CallbackQuery, state: FSMContext) -> None:
+    user_id = callback.from_user.id
+    if user_id not in settings.bot.admin_ids:
+        await callback.answer("Ruxsatingiz yo'q!", show_alert=True)
+        return
+
+    cid = int(callback.data.split(":", 1)[1])
+    courses, counts = await _get_courses_and_counts()
+    course_map = {c["id"]: c.get("title", f"Kurs #{c['id']}") for c in courses}
+    course_title = course_map.get(cid, f"Kurs #{cid}")
+
+    students_cnt = counts.get(f"course_students_{cid}", 0)
+    all_cnt = counts.get(f"course_all_{cid}", 0)
+
+    txt = (
+        f"🎯 <b>Tanlangan Kurs:</b> {course_title}\n\n"
+        f"Xabarni kimlarga yubormoqchisiz? Tanlang:\n\n"
+        f"• 👥 <b>Faqat o'quvchilarga</b> — Mentorlar bu xabardan bexabar qoladi <i>(Monetizatsiya va maxsus takliflar uchun qulay)</i>\n"
+        f"• 🌐 <b>Barchaga</b> — O'quvchilar va ushbu kurs ochiq bo'lgan barcha mentorlarga birdek boradi"
+    )
+
+    await callback.message.edit_text(
+        txt,
+        reply_markup=get_broadcast_course_audience_keyboard(cid, course_title, students_cnt, all_cnt),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("bcast_target:"))
 async def process_target_selection(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = callback.from_user.id
@@ -501,6 +576,12 @@ async def process_target_selection(callback: CallbackQuery, state: FSMContext) -
         mid = int(target.replace("mentor_", ""))
         m_info, _, _ = await _get_mentor_courses_and_counts(mid)
         target_label = f"👨‍🏫 {m_info['full_name']}ning BARCHA shogirdlari"
+    elif target.startswith("course_students_"):
+        cid = int(target.replace("course_students_", ""))
+        target_label = f"👥 «{course_map.get(cid, cid)}» o'quvchilari (Mentorlarsiz)"
+    elif target.startswith("course_all_"):
+        cid = int(target.replace("course_all_", ""))
+        target_label = f"🌐 «{course_map.get(cid, cid)}» (O'quvchilar + Mentorlar)"
     elif target.startswith("course_"):
         cid = int(target.replace("course_", ""))
         target_label = f"📚 «{course_map.get(cid, cid)}» kursi talabalari"

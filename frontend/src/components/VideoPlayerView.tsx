@@ -22,6 +22,9 @@ import {
   Video as VideoIcon,
   X,
   MessageSquare,
+  ThumbsUp,
+  ThumbsDown,
+  Mic,
 } from 'lucide-react';
 import { Lesson, Course, AppView } from '../types';
 import {
@@ -38,6 +41,7 @@ import { triggerHaptic, getTelegramUser } from '../services/telegram';
 import { LessonAiAssistant } from './LessonAiAssistant';
 import { LessonQuizCard } from './LessonQuizCard';
 import { FeedbackModal } from './FeedbackModal';
+import { VoiceReportModal } from './VoiceReportModal';
 import { TgText } from './TgEmoji';
 
 interface VideoPlayerViewProps {
@@ -75,6 +79,8 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const [copiedTemplate, setCopiedTemplate] = useState(false);
   const [showCourseCompletedModal, setShowCourseCompletedModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [feedbackReaction, setFeedbackReaction] = useState<'like' | 'dislike' | null>(null);
   const [watermarkPos, setWatermarkPos] = useState({ top: '25%', left: '20%' });
   const [studentProfile, setStudentProfile] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -272,6 +278,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const currentIndex = lessons.findIndex((l) => String(l.id) === String(lessonId));
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex !== -1 && currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
+  const isLastLesson = lessons.length > 0 && (currentIndex === lessons.length - 1 || !nextLesson);
 
   const activeIsAudio = forceMode === 'audio' ? true : forceMode === 'video' ? false : isAudio;
 
@@ -841,19 +848,77 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
             </p>
           )}
 
-          {/* Dars haqida fikr bildirish (Student Feedback) */}
-          <div className="flex items-center justify-end pt-1">
-            <button
-              onClick={() => {
-                triggerHaptic('light');
-                setShowFeedbackModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-tg-secondary hover:bg-tg-secondary/80 text-xs font-semibold text-tg-text transition-all cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Dars haqida fikr bildirish</span>
-            </button>
+          {/* Dars sizga ma'qul bo'ldimi? (Modern ThumbsUp / ThumbsDown vector reaction widget) */}
+          <div className="p-3.5 bg-tg-secondary/40 border border-tg-secondary rounded-2xl flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold text-tg-text">
+              Dars sizga ma'qul bo'ldimi?
+            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setFeedbackReaction('like');
+                  setShowFeedbackModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                title="Ha, yoqdi"
+              >
+                <ThumbsUp className="w-3.5 h-3.5 stroke-[2.2]" />
+                <span>Yoqdi</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setFeedbackReaction('dislike');
+                  setShowFeedbackModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                title="Yoqmadi"
+              >
+                <ThumbsDown className="w-3.5 h-3.5 stroke-[2.2]" />
+                <span>Yoqmadi</span>
+              </button>
+            </div>
           </div>
+
+          {/* Ovozli hisobot yuborish (Voice Report to Mentor) - Faqat kursning oxirgi darsida */}
+          {isLastLesson && (
+            <div className="p-4 bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-blue-500/15 border-2 border-indigo-500/40 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in duration-300">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/30">
+                  <Mic className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-tg-text truncate">
+                      Kurs yakuni bo'yicha umumiy ovozli hisobot
+                    </h4>
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-600 text-white shadow-xs shrink-0">
+                      Yakuniy
+                    </span>
+                  </div>
+                  <p className="text-xs text-tg-hint leading-relaxed">
+                    Barcha darslardan olgan umumiy xulosangizni 1-3 daqiqalik ovozda mentorga so'zlab bering.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setShowVoiceModal(true);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs sm:text-sm font-bold rounded-2xl shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Mic className="w-4 h-4" />
+                <span>Ovoz yozish</span>
+              </button>
+            </div>
+          )}
 
           {/* Prev / Next Lesson Navigation Buttons */}
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-tg-secondary">
@@ -959,6 +1024,20 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
         lessonId={lessonId}
         courseTitle={course?.title}
         lessonTitle={currentLesson?.title}
+        initialReaction={feedbackReaction}
+      />
+
+      {/* Voice Report to Mentor Modal */}
+      <VoiceReportModal
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        lessonId={lessonId}
+        lessonTitle={currentLesson?.title}
+        courseTitle={course?.title}
+        onSuccess={() => {
+          setIsCompleted(true);
+          reportProgress(100, 100, true);
+        }}
       />
     </div>
   );

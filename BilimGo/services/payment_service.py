@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 from core.exceptions import NotFoundError
 from db.repositories.access_grant_repo import AccessGrantRepository
@@ -50,6 +50,7 @@ class PaymentService:
         course_id: int,
         license_node_id: int,
         provider: PaymentProvider,
+        amount: Optional[float] = None,
     ) -> PendingPurchase:
         course = await self._course_repo.get_by_id(course_id)
         if course is None or course.status != "published":
@@ -66,14 +67,16 @@ class PaymentService:
                 )
                 effective_node_id = 1
 
+        effective_amount = amount if (amount is not None and amount > 0) else course.base_price
+
         sale_id = await self._sale_repo.create_pending(
             student_id=student_id,
             course_id=course_id,
             license_node_id=effective_node_id,
-            amount=course.base_price,
+            amount=effective_amount,
             payment_provider=provider,
         )
-        return PendingPurchase(sale_id=sale_id, amount=course.base_price)
+        return PendingPurchase(sale_id=sale_id, amount=effective_amount)
 
     async def confirm_payment(self, sale_id: int, external_txn_id: str) -> None:
         """To'lov provayderi (Click/Payme) tomonidan tasdiqlangandan keyin
@@ -124,5 +127,19 @@ class PaymentService:
                         f"Kurs siz uchun ochildi! «🎓 Mening kurslarim» bo'limi orqali darslarni boshlashingiz mumkin. Omad! 🚀"
                     )
                     await self._userbot_client.send_message(student.telegram_id, success_text)
+
+                    # 🔔 Adminga yangi to'lov haqida xabarnoma (Topic 4: To'lovlar va cheklar)
+                    try:
+                        admin_pay_text = (
+                            f"💳 <b>YANGI TO'LOV MUVAFFAQIYATLI O'TDI!</b>\n\n"
+                            f"📚 <b>Kurs:</b> {course.title}\n"
+                            f"👤 <b>Talaba:</b> {student.full_name or 'Talaba'} (ID: <code>{student.telegram_id}</code>)\n"
+                            f"💰 <b>Summa:</b> {sale.amount:,.0f} so'm\n"
+                            f"🧾 <b>Tranzaksiya:</b> #{sale.id}"
+                        )
+                        from services.admin_notifier import admin_notifier
+                        await admin_notifier.send_payment_alert(admin_pay_text)
+                    except Exception as notify_err:
+                        logger.warning("Adminga to'lov xabarnomasini yuborishda xatolik: %s", notify_err)
             except Exception:
                 logger.exception("To'lov tasdiqlangach bildirishnoma yuborishda xato, sale_id=%s", sale.id)

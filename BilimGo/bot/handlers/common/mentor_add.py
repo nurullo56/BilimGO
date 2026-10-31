@@ -11,12 +11,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.handlers.common._utils import AddMentorState, _notify_super_mentors_about_mentor_activation
-from bot.keyboards.admin_kb import ADMIN_MENU
-from bot.keyboards.common_kb import (
+from bot.keyboards.admin import ADMIN_MENU
+from bot.keyboards.common import (
     get_mentor_assignment_courses_keyboard,
     get_mentor_tariff_keyboard,
 )
-from bot.keyboards.mentor_kb import get_mentor_inline_webapp
+from bot.keyboards.mentor import get_mentor_inline_webapp
 from core.config import settings
 from db.database import database
 from db.repositories.access_grant_repo import AccessGrantRepository

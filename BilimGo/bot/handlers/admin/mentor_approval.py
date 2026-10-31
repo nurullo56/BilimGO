@@ -18,6 +18,7 @@ from db.repositories.course_repo import CourseRepository
 from db.repositories.license_node_repo import LicenseNodeRepository
 from db.repositories.mentor_application_repo import MentorApplicationRepository
 from db.repositories.user_repo import User, UserRepository
+from services.admin_notifier import AdminNotifier
 from services.cabinet_service import CabinetService
 
 logger = logging.getLogger(__name__)
@@ -411,15 +412,5 @@ async def handle_user_sent_receipt_photo(message: Message, user: User, bot: Bot)
         ]
     )
 
-    try:
-        await bot.send_photo(
-            chat_id=group_id,
-            photo=photo_id,
-            caption=receipt_caption,
-            message_thread_id=topic_id,
-            reply_markup=kb,
-            parse_mode="HTML",
-        )
-        logger.info("Chek fotosi Topic %s ga inline tugmalar bilan yuborildi.", topic_id)
-    except Exception as ex:
-        logger.warning("Guruhga chek rasmini yuborishda xatolik: %s", ex)
+    notifier = AdminNotifier(bot)
+    await notifier.send_payment_receipt(photo_id, receipt_caption, reply_markup=kb)

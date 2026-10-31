@@ -48,7 +48,7 @@ def get_broadcast_target_keyboard(courses: list[dict], counts: dict[str, int]) -
         keyboard.append([
             InlineKeyboardButton(
                 text=f"{icon} {c_title} ({cnt} ta)",
-                callback_data=f"bcast_target:course_{cid}",
+                callback_data=f"bcast_course_choose:{cid}",
             )
         ])
 
@@ -57,6 +57,34 @@ def get_broadcast_target_keyboard(courses: list[dict], counts: dict[str, int]) -
         InlineKeyboardButton(text="❌ Bekor qilish", callback_data="bcast_cancel")
     ])
 
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_broadcast_course_audience_keyboard(
+    course_id: int,
+    course_title: str,
+    students_count: int,
+    all_count: int,
+) -> InlineKeyboardMarkup:
+    """Kurs bo'yicha auditoriyani tanlash: faqat o'quvchilar yoki mentorlar bilan birga."""
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text=f"👥 Faqat o'quvchilarga (Mentorsiz) ({students_count} ta)",
+                callback_data=f"bcast_target:course_students_{course_id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"🌐 Barchaga (Talabalar + Mentorlar) ({all_count} ta)",
+                callback_data=f"bcast_target:course_all_{course_id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Kurslarga qaytish", callback_data="bcast_back_target"),
+            InlineKeyboardButton(text="❌ Bekor qilish", callback_data="bcast_cancel"),
+        ],
+    ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

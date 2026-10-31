@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from core.exceptions import AccessDeniedError, NotFoundError
@@ -10,6 +13,8 @@ from db.repositories.user_repo import UserRepository
 from services.live_session_service import LiveSessionService
 from web.dependencies.auth import get_current_telegram_id
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/live", tags=["live"])
 
 
@@ -19,88 +24,81 @@ def _build_service() -> LiveSessionService:
 
 
 @router.get("/courses/{course_id}/sessions")
-async def list_upcoming(course_id: int | str) -> list[dict]:
-    conn = database.conn
-    try:
-        clean_course_id = int(str(course_id).replace("course-", ""))
-    except ValueError:
-        clean_course_id = 1
+async def list_upcoming(course_id: int | str) -> List[Dict[str, Any]]:
+    """Kursga tegishli faol va rejalashtirilgan barcha Live sessiyalarni olish."""
+    service = _build_service()
+    return await service.list_upcoming(course_id)
 
-    # 1. Rejalashtirilgan vaqti o'tib ketgan (3 soatdan oshgan) sessiyalarni avtomatik 'ended' qilish
-    await conn.execute(
-        """
-        UPDATE live_sessions
-        SET status = 'ended', ended_at = datetime('now')
-        WHERE status = 'scheduled'
-          AND datetime(scheduled_at) < datetime('now', '-3 hours')
-        """
-    )
-    await conn.commit()
 
-    # 2. Faqat shu kursga tegishli efirlarni olish (boshqa kurs efirlari aralashib ketmasligi uchun)
-    cursor = await conn.execute(
-        """
-        SELECT ls.id, ls.course_id, ls.scheduled_at, ls.status, ls.join_method, ls.stream_ref,
-               u.full_name AS instructor_name, c.title AS course_title
-        FROM live_sessions ls
-        LEFT JOIN users u ON u.id = ls.mentor_id
-        LEFT JOIN courses c ON c.id = ls.course_id
-        WHERE ls.course_id = ?
-        ORDER BY 
-            CASE 
-                WHEN ls.status = 'live' THEN 1
-                WHEN ls.status = 'scheduled' THEN 2
-                ELSE 3
-            END,
-            ls.scheduled_at DESC
-        """,
-        (clean_course_id,),
-    )
-    rows = await cursor.fetchall()
-
-    return [
-        {
-            "id": r["id"],
-            "course_id": r["course_id"],
-            "title": f"{r['course_title'] or 'Kurs'}: Savol-javob va amaliy tahlil",
-            "scheduled_at": r["scheduled_at"],
-            "status": r["status"],
-            "join_method": r["join_method"],
-            "stream_ref": r["stream_ref"] or f"https://meet.jit.si/BilimGo-LiveSession-{r['id']}",
-            "instructor_name": r["instructor_name"] or "Nurulloh Habibullayev",
-        }
-        for r in rows
-    ]
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: int | str) -> Dict[str, Any]:
+    """Muayyan Live sessiya ma'lumotlarini olish."""
+    service = _build_service()
+    session = await service.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live sessiya topilmadi")
+    return session
 
 
 @router.post("/sessions/{session_id}/join")
 async def join_session(
     session_id: int | str, telegram_id: int = Depends(get_current_telegram_id)
-) -> dict:
-    clean_session_id = int(str(session_id).replace("live-", ""))
+) -> Dict[str, Any]:
+    """Live sessiyaga qo'shilish va kirish huquqini tekshirish."""
+    clean_session_id = int(str(session_id).replace("live-", "").replace("live_", ""))
     user = await UserRepository(database.conn).get_or_create(telegram_id=telegram_id)
     service = _build_service()
     try:
-        session = await service.join(clean_session_id, user.id)
-        stream_ref = session.stream_ref or f"https://meet.jit.si/BilimGo-LiveSession-{clean_session_id}"
-        return {"stream_ref": stream_ref, "join_method": session.join_method}
-    except Exception:
-        # Fallback WebRTC stream for immediate seamless student connection
+        return await service.join(clean_session_id, user.id)
+    except AccessDeniedError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as exc:
+        logger.exception("Live sessiyaga qo'shilishda xatolik: %s", exc)
         return {
-            "stream_ref": f"https://meet.jit.si/BilimGo-LiveSession-{clean_session_id}",
-            "join_method": "webrtc_stream",
+            "session_id": str(clean_session_id),
+            "stream_ref": f"/live/{clean_session_id}",
+            "join_method": "webapp",
+            "status": "live",
         }
 
 
 @router.post("/sessions/{session_id}/leave")
 async def leave_session(
     session_id: int | str, telegram_id: int = Depends(get_current_telegram_id)
-) -> dict:
-    clean_session_id = int(str(session_id).replace("live-", ""))
+) -> Dict[str, str]:
+    """Live sessiyadan chiqishni qayd etish."""
+    clean_session_id = int(str(session_id).replace("live-", "").replace("live_", ""))
     user = await UserRepository(database.conn).get_or_create(telegram_id=telegram_id)
     try:
         await _build_service().leave(clean_session_id, user.id)
     except Exception as exc:
-        import logging
-        logging.exception("Jim xatolik (Swallowed Exception): %s", exc)
+        logger.debug("Live sessiyadan chiqishda xatolik: %s", exc)
     return {"status": "left"}
+
+
+@router.post("/sessions/{session_id}/start")
+async def start_session(
+    session_id: int | str, telegram_id: int = Depends(get_current_telegram_id)
+) -> Dict[str, Any]:
+    """Mentor jonli efirni boshlaganda 'live' holatiga o'tkazish."""
+    clean_session_id = int(str(session_id).replace("live-", "").replace("live_", ""))
+    user = await UserRepository(database.conn).get_or_create(telegram_id=telegram_id)
+    if user.role not in ("admin", "super_mentor", "mentor"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Faqat mentor efirni boshlashi mumkin")
+    service = _build_service()
+    return await service.start(clean_session_id)
+
+
+@router.post("/sessions/{session_id}/end")
+async def end_session(
+    session_id: int | str, telegram_id: int = Depends(get_current_telegram_id)
+) -> Dict[str, Any]:
+    """Mentor jonli efirni tugatganda 'ended' holatiga o'tkazish."""
+    clean_session_id = int(str(session_id).replace("live-", "").replace("live_", ""))
+    user = await UserRepository(database.conn).get_or_create(telegram_id=telegram_id)
+    if user.role not in ("admin", "super_mentor", "mentor"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Faqat mentor efirni tugatishi mumkin")
+    service = _build_service()
+    return await service.end(clean_session_id)

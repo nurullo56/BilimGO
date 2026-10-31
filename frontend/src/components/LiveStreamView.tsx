@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { AppView } from '../types';
 import { getTelegramUser, triggerHaptic } from '../services/telegram';
+import { getApiBaseUrl } from '../services/api';
 import { TgText } from './TgEmoji';
 
 interface LiveStreamViewProps {
@@ -127,8 +128,101 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
   const localStreamRef = useRef<MediaStream | null>(null);
   const pipStreamRef = useRef<MediaStream | null>(null);
   const studentAudioStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [isPipCamActive, setIsPipCamActive] = useState(false);
+
+  const RTC_CONFIG: RTCConfiguration = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
+  };
+
+  const createPeerConnection = (remoteUserId?: number) => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    peerConnectionRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && wsRef.current) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'webrtc_ice_candidate',
+            candidate: event.candidate,
+            target_user_id: remoteUserId,
+          })
+        );
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log('Live stream remote track received:', event.streams);
+      if (videoRef.current && event.streams[0]) {
+        videoRef.current.srcObject = event.streams[0];
+        videoRef.current.play().catch((err) => console.warn('Video play warning:', err));
+      }
+    };
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        pc.addTrack(track, localStreamRef.current!);
+      });
+    }
+
+    return pc;
+  };
+
+  // 1. Establish WebSocket Connection to Backend
+  useEffect(() => {
+    const apiBase = getApiBaseUrl();
+    const wsProto = apiBase.startsWith('https') ? 'wss:' : 'ws:';
+    const host = apiBase.replace(/^https?:\/\//, '');
+    const cleanSessionId = String(sessionId).replace('live-', '').replace('live_', '');
+    const tgUser = user || getTelegramUser();
+    const userId = tgUser?.id || 0;
+    const wsUrl = `${wsProto}//${host}/live/ws/${cleanSessionId}?user_id=${userId}`;
+
+    let socket: WebSocket | null = null;
+    try {
+      socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        console.log('Live WebSocket connected successfully');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleServerMessage(data);
+        } catch (e) {
+          console.error('Failed to parse WS message:', e);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.warn('Live WebSocket error:', err);
+      };
+
+      socket.onclose = () => {
+        console.log('Live WebSocket connection closed');
+      };
+    } catch (e) {
+      console.error('Could not create WebSocket:', e);
+    }
+
+    return () => {
+      stopAllMediaTracks();
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        socket.close();
+      }
+      wsRef.current = null;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     if (isPipCamActive && pipVideoRef.current && pipStreamRef.current) {
@@ -147,6 +241,10 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
 
   const stopAllMediaTracks = () => {
     stopPipCamera();
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
@@ -285,13 +383,72 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
         setActiveSpeakerName(null);
         break;
 
+      case 'broadcast_active':
       case 'start_broadcast':
         setIsBroadcasting(true);
         setStreamStatus('live');
+        if (!isHost) {
+          createPeerConnection(rest.broadcaster?.user_id || rest.user_id);
+        }
         break;
 
       case 'stop_broadcast':
         setIsBroadcasting(false);
+        if (!isHost && videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+        break;
+
+      case 'webrtc_offer':
+        if (!isHost && rest.data) {
+          (async () => {
+            try {
+              const pc = peerConnectionRef.current || createPeerConnection(rest.sender_id);
+              await pc.setRemoteDescription(new RTCSessionDescription(rest.data));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              if (wsRef.current) {
+                wsRef.current.send(
+                  JSON.stringify({
+                    type: 'webrtc_answer',
+                    target_user_id: rest.sender_id,
+                    data: answer,
+                  })
+                );
+              }
+            } catch (err) {
+              console.warn('WebRTC offer handling warning:', err);
+            }
+          })();
+        }
+        break;
+
+      case 'webrtc_answer':
+        if (isHost && rest.data && peerConnectionRef.current) {
+          (async () => {
+            try {
+              await peerConnectionRef.current.setRemoteDescription(
+                new RTCSessionDescription(rest.data)
+              );
+            } catch (err) {
+              console.warn('WebRTC answer handling warning:', err);
+            }
+          })();
+        }
+        break;
+
+      case 'webrtc_ice_candidate':
+        if (rest.data && peerConnectionRef.current) {
+          (async () => {
+            try {
+              await peerConnectionRef.current.addIceCandidate(
+                new RTCIceCandidate(rest.data)
+              );
+            } catch (err) {
+              console.warn('WebRTC candidate handling warning:', err);
+            }
+          })();
+        }
         break;
 
       case 'stream_status':
@@ -373,6 +530,20 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
             mode,
           })
         );
+
+        try {
+          const pc = createPeerConnection();
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          wsRef.current.send(
+            JSON.stringify({
+              type: 'webrtc_offer',
+              data: offer,
+            })
+          );
+        } catch (offerErr) {
+          console.warn('Host WebRTC offer warning:', offerErr);
+        }
       }
       triggerHaptic('success');
     } catch (err: any) {

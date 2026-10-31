@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.mentor_kb import (
+from bot.keyboards.mentor import (
     get_live_course_select_keyboard,
     get_live_session_scheduled_keyboard,
 )
@@ -108,28 +108,36 @@ async def enter_datetime(message: Message, user: User, state: FSMContext, bot: B
     course = await CourseRepository(database.conn).get_by_id(course_id)
     course_title = course.title if course else f"Kurs #{course_id}"
 
-    # Live session yaratish
-    session = await live_manager.create_session(
-        course_id=course_id,
-        mentor_id=user.id,
-        title=f"{course_title} bo'yicha jonli efir",
-        scheduled_at=scheduled_at,
-    )
+    try:
+        # Live session yaratish
+        session = await live_manager.create_session(
+            course_id=course_id,
+            mentor_id=user.id,
+            title=f"{course_title} bo'yicha jonli efir",
+            scheduled_at=scheduled_at,
+        )
 
-    await state.clear()
+        await state.clear()
 
-    webapp_url = f"{settings.webapp.base_url}/live/{session['id']}"
-    keyboard = get_live_session_scheduled_keyboard(session["id"], webapp_url)
+        webapp_url = f"{settings.webapp.base_url}/live/{session['id']}"
+        keyboard = get_live_session_scheduled_keyboard(session["id"], webapp_url)
 
-    await message.answer(
-        f"✅ <b>Live dars muvaffaqiyatli belgilandi!</b> 🎉\n\n"
-        f"📺 <b>Sessiya ID:</b> <code>{session['id']}</code>\n"
-        f"📚 <b>Kurs:</b> {course_title}\n"
-        f"📅 <b>Vaqt:</b> {scheduled_at.strftime('%d-%m-%Y %H:%M')}\n"
-        f"🔗 <b>Havola:</b> {webapp_url}\n\n"
-        f"<i>Efir boshlanganda «📢 Talabalarga xabar yuborish» orqali ularni xabardor qilishingiz mumkin.</i>",
-        reply_markup=keyboard,
-    )
+        await message.answer(
+            f"✅ <b>Live dars muvaffaqiyatli belgilandi!</b> 🎉\n\n"
+            f"📺 <b>Sessiya ID:</b> <code>{session['id']}</code>\n"
+            f"📚 <b>Kurs:</b> {course_title}\n"
+            f"📅 <b>Vaqt:</b> {scheduled_at.strftime('%d-%m-%Y %H:%M')}\n"
+            f"🔗 <b>Havola:</b> {webapp_url}\n\n"
+            f"<i>Efir boshlanganda «📢 Talabalarga xabar yuborish» orqali ularni xabardor qilishingiz mumkin.</i>",
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        logger.exception("Live dars belgilashda xatolik yuz berdi: %s", e)
+        await message.answer(
+            f"❌ <b>Xatolik yuz berdi!</b>\n\n"
+            f"Live darsni saqlashda xatolik yuz berdi: <code>{str(e)}</code>\n"
+            f"Iltimos, qaytadan urinib ko'ring yoki /cancel deb yozing."
+        )
 
 
 @router.callback_query(F.data.startswith("live_notify:"))

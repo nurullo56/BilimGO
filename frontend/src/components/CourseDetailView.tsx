@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
+  Check,
+  Zap,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -13,7 +15,7 @@ import {
   User,
   Video,
 } from 'lucide-react';
-import { Course, Lesson, AppView } from '../types';
+import { Course, Lesson, AppView, CourseTariff } from '../types';
 import {
   fetchCourseById,
   fetchCourseLessons,
@@ -39,6 +41,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   onSelectLesson,
 }) => {
   const [course, setCourse] = useState<Course | null>(null);
+  const [selectedTariff, setSelectedTariff] = useState<CourseTariff | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [liveCount, setLiveCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,12 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
         fetchCourseWaitlistStatus(courseId).catch(() => null),
       ]);
       setCourse(courseData);
+      if (courseData?.tariffs && courseData.tariffs.length > 0) {
+        const pop = courseData.tariffs.find((t: CourseTariff) => Boolean(t.is_popular)) || courseData.tariffs[0];
+        setSelectedTariff(pop || null);
+      } else {
+        setSelectedTariff(null);
+      }
       setLessons(lessonsData);
       setLiveCount((liveData || []).filter((s: any) => s.status === 'live' || s.status === 'scheduled').length);
       if (wlData) setWaitlistStatus(wlData);
@@ -148,7 +157,8 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
   }
 
   const unlockedCount = lessons.filter((l) => l.unlocked || l.is_free_preview).length;
-  const formattedPrice = new Intl.NumberFormat('uz-UZ').format(course.base_price);
+  const effectivePrice = selectedTariff ? selectedTariff.price : course.base_price;
+  const formattedPrice = new Intl.NumberFormat('uz-UZ').format(effectivePrice);
   const isEnrolled = Boolean(course.is_enrolled);
 
   return (
@@ -198,6 +208,91 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
               </span>
             </div>
           </div>
+
+          {/* Tariffs Selection (e.g. START, PRO, VIP) */}
+          {course.tariffs && course.tariffs.length > 0 && !isEnrolled && !course.is_waitlist && (
+            <div className="space-y-2.5 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-tg-text uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  Tarifni tanlang:
+                </span>
+                <span className="text-[11px] font-medium text-tg-hint">
+                  {course.tariffs.length} ta maxsus tarif
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {course.tariffs.map((t) => {
+                  const isSelected = selectedTariff?.id === t.id;
+                  const isPopular = Boolean(t.is_popular);
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setSelectedTariff(t);
+                      }}
+                      className={`relative p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-500/10 shadow-md ring-2 ring-blue-500/30'
+                          : 'border-tg-secondary bg-tg-secondary/40 hover:border-blue-500/30 hover:bg-tg-secondary/70'
+                      }`}
+                    >
+                      {isPopular && (
+                        <span className="absolute -top-2.5 right-3 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs">
+                          Tavsiya etiladi ⭐
+                        </span>
+                      )}
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-tg-text flex items-center gap-1.5">
+                            <span>{t.name}</span>
+                          </h4>
+                          <div
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-600 text-white'
+                                : 'border-tg-hint'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                        </div>
+
+                        {t.tagline && (
+                          <p className="text-[11px] text-tg-hint leading-tight">
+                            {t.tagline}
+                          </p>
+                        )}
+
+                        <div className="pt-1">
+                          <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                            {new Intl.NumberFormat('uz-UZ').format(t.price)}{' '}
+                            <span className="text-xs font-normal">so'm</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {t.features && t.features.length > 0 && (
+                        <ul className="mt-2.5 pt-2 border-t border-tg-secondary/70 space-y-1">
+                          {t.features.map((feat, fIdx) => (
+                            <li
+                              key={fIdx}
+                              className="text-[11px] text-tg-hint flex items-start gap-1.5 leading-tight"
+                            >
+                              <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                              <span>{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Action Bar: Waitlist / Purchase / Live sessions */}
           <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
@@ -275,7 +370,11 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
                 className="flex-1 py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <CreditCard className="w-4 h-4" />
-                <span>Sotib olish ({formattedPrice} so'm)</span>
+                <span>
+                  {selectedTariff
+                    ? `Sotib olish — ${selectedTariff.name} (${formattedPrice} so'm)`
+                    : `Sotib olish (${formattedPrice} so'm)`}
+                </span>
               </button>
             )}
 
@@ -295,6 +394,21 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Konkurs Kursi Maxsus Sharti */}
+      {(Number(course.id) === 3 || course.title.toLowerCase().includes('konkurs') || course.title.toLowerCase().includes('aksiya')) && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 shadow-xs">
+          <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <span className="font-bold text-amber-800 dark:text-amber-300 block text-sm">
+              ⚠️ DIQQAT: KONKURS KURSI VA BOTGA KIRISH SHARTI!
+            </span>
+            <p className="text-amber-700/95 dark:text-amber-200/95 leading-relaxed">
+              Konkurs boti va barcha kirish imtiyozlari <b>aynan hozir BilimGo tizimiga ulangan faol Telegram akkauntingiz</b> uchun taqdim etiladi. Keyinchalik <i>«Boshqa akkauntimga yoki boshqa raqamimga o'tkazib bering»</i> degan murojaatlar <b>mutlaqo qabul qilinmaydi va tan olinmaydi!</b> Iltimos, faqat o'zingiz doimiy ishlatadigan asosiy Telegram akkauntingizdan qatnashing.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Adaptive Unlock Notice */}
       <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-start gap-3">
@@ -541,6 +655,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
       {/* Payment Modal */}
       <PaymentModal
         course={course}
+        selectedTariff={selectedTariff}
         isOpen={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
         onSuccessEnrolled={() => {

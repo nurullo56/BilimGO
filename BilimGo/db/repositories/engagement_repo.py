@@ -39,7 +39,7 @@ class EngagementRepository(BaseRepository):
             """
             SELECT ea.user_id FROM engagement_activity ea
             JOIN users u ON u.id = ea.user_id
-            WHERE ea.last_seen_at < datetime('now', ?)
+            WHERE u.status = 'active' AND ea.last_seen_at < datetime('now', ?)
             """,
             (f"-{hours} hours",),
         )

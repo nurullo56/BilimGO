@@ -63,10 +63,18 @@ async def initiate_purchase(
     course_id: int,
     license_node_id: int,
     provider: PaymentProvider,
+    tariff_id: int | None = None,
     telegram_id: int = Depends(get_current_telegram_id),
 ) -> dict:
     user_repo = UserRepository(database.conn)
     user = await user_repo.get_or_create(telegram_id=telegram_id)
+
+    amount = None
+    if tariff_id:
+        from db.repositories.course_tariff_repo import CourseTariffRepository
+        tariff = await CourseTariffRepository(database.conn).get_by_id(tariff_id)
+        if tariff:
+            amount = tariff.get("price")
 
     payment_service = _build_payment_service()
     try:
@@ -75,6 +83,7 @@ async def initiate_purchase(
             course_id=course_id,
             license_node_id=license_node_id,
             provider=provider,
+            amount=amount,
         )
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

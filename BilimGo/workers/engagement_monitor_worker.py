@@ -5,6 +5,7 @@ import logging
 import os
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from core.config import settings
 from db.database import Database
@@ -28,8 +29,9 @@ async def run_forever() -> None:
     await db.run_migrations(settings.db.migrations_dir)
 
     bot = Bot(token=settings.bot.token)
+    nudge_repo = NudgeRepository(db.conn)
     service = EngagementMonitorService(
-        EngagementRepository(db.conn), NudgeRepository(db.conn)
+        EngagementRepository(db.conn), nudge_repo
     )
     user_repo = UserRepository(db.conn)
 
@@ -49,8 +51,17 @@ async def run_forever() -> None:
                 try:
                     await bot.send_message(user.telegram_id, formatted_text)
                     logger.info("Nudge yuborildi: user_id=%s, tg_id=%s", user_id, user.telegram_id)
+                except (TelegramForbiddenError, TelegramBadRequest) as tg_err:
+                    logger.warning(
+                        "Nudge yuborib bo'lmadi (user_id=%s, tg_id=%s): %s. Kampaniya to'xtatildi.",
+                        user_id,
+                        user.telegram_id,
+                        tg_err,
+                    )
+                    await nudge_repo.stop_campaign(user_id)
+                    await user_repo.set_status(user_id, "blocked")
                 except Exception:
-                    logger.exception("Nudge yuborishda xato: user_id=%s", user_id)
+                    logger.exception("Nudge yuborishda kutilmagan xato: user_id=%s", user_id)
             await asyncio.sleep(SCAN_INTERVAL_SECONDS)
     finally:
         await bot.session.close()
