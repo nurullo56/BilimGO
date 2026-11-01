@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
-from anthropic import AsyncAnthropic
 
 from core.config import settings
 from db.repositories.ai_token_repo import AITokenRepository
@@ -93,75 +92,56 @@ def _detect_domain(course_title: str, lesson_title: str) -> str:
         return "konkurs"
     if "sayt" in combined or "adsense" in combined or "seo" in combined:
         return "sayt"
-    if "xitoy" in combined or "import" in combined or "1688" in combined or "kargo" in combined:
+    if "xitoy" in combined or "import" in combined or "1688" in combined or "taobao" in combined or "kargo" in combined:
         return "xitoy"
     return "logistika"
 
 
 class AITutorService:
-    """Har bir video dars tagidagi maxsus AI Ustoz — talabaning savollariga
-    aniq kurs va dars kontekstida javob beradi va tokenni mentoriga hisoblaydi."""
-
     def __init__(
         self,
-        ai_token_repo: AITokenRepository,
-        lesson_repo: LessonRepository,
         course_repo: CourseRepository,
+        lesson_repo: LessonRepository,
         criteria_repo: AssessmentCriteriaRepository,
+        ai_token_repo: AITokenRepository,
         user_repo: UserRepository,
-        client: AsyncAnthropic | None = None,
     ) -> None:
-        self._ai_token_repo = ai_token_repo
-        self._lesson_repo = lesson_repo
         self._course_repo = course_repo
+        self._lesson_repo = lesson_repo
         self._criteria_repo = criteria_repo
+        self._ai_token_repo = ai_token_repo
         self._user_repo = user_repo
-        self._client = client or (AsyncAnthropic(api_key=settings.anthropic.api_key) if settings.anthropic.api_key else None)
 
     async def resolve_student_mentor_id(self, student_id: int) -> int:
-        """Talabaning shaxsiy ustozi (mentor_id)ni aniqlaydi."""
-        cursor = await self._ai_token_repo._conn.execute(
-            """
-            SELECT ln.owner_user_id AS mentor_id
-            FROM cabinet_members cm
-            JOIN cabinets c ON c.id = cm.cabinet_id
-            JOIN license_nodes ln ON ln.id = c.owner_node_id
-            WHERE cm.user_id = ?
-            LIMIT 1
-            """,
-            (student_id,),
-        )
-        row = await cursor.fetchone()
-        if row and row["mentor_id"]:
-            return row["mentor_id"]
-        return 1
+        from db.database import database
+        from db.repositories.cabinet_repo import CabinetRepository
 
-    async def ask_lesson_ai(
+        cabinet_repo = CabinetRepository(database.conn)
+        mentor_id = await cabinet_repo.get_student_mentor_owner_id(student_id)
+        return mentor_id if mentor_id else 1
+
+    async def ask_tutor(
         self,
         student_id: int,
         lesson_id: int,
+        course_id: int,
         user_message: str,
         history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
+        course = await self._course_repo.get_by_id(course_id)
         lesson = await self._lesson_repo.get_by_id(lesson_id)
-        course_title = "Logistika Asoslari"
-        course_description = ""
-        if lesson:
-            course = await self._course_repo.get_by_id(lesson.course_id)
-            if course:
-                course_title = course.title
-                course_description = course.description or ""
+        criteria = await self._criteria_repo.get_by_lesson_id(lesson_id)
 
-        lesson_title = lesson.title if lesson else "Dars"
+        course_title = course.title if course else "Amaliy Biznes Ta'limi"
+        course_description = course.description if course else ""
+        lesson_title = lesson.title if lesson else f"Dars #{lesson_id}"
+
         domain_key = _detect_domain(course_title, lesson_title)
         domain_profile = COURSE_DOMAIN_PROFILES.get(domain_key, COURSE_DOMAIN_PROFILES["logistika"])
-
-        criteria = await self._criteria_repo.get_by_lesson(lesson_id)
         key_concepts = criteria.key_concepts if criteria else "Mavzuning amaliy tushunchalari va qo'llanilishi"
 
-        # Build deep, domain-specific System Prompt
         system_prompt = (
-            f"Sen «BilimGo» ta'lim platformasining professional, samimiy va tajribali «{domain_profile['role_name']}»san.\n\n"
+            f"Sen «BilimGo» ta'lim platformasining professional, samimiy va tajribali «{domain_profile['role_name']}» (AGY AI Ustoz)san.\n\n"
             f"🎓 O'QUV YO'NALISHI VA KONTEKST:\n"
             f"• Kurs: «{course_title}»\n"
             f"• Kurs tavsifi: {course_description or domain_profile['description']}\n"
@@ -172,7 +152,7 @@ class AITutorService:
             f"🎯 TALABALAR BILAN ISHLASH QOIDALARI:\n"
             f"1. Faqat o'zbek tilida, nihoyatda tushunarli, aniq, muloyim va amaliy misollar bilan javob ber.\n"
             f"2. Talabaning savoli ushbu dars va kurs yo'nalishiga qanchalik mos ekanligini hisobga ol.\n"
-            f"3. Murakkab atamalarni hayotiy, kundalik misollar orqali tushuntir (masalan, fura qidirish, fraxt hisoblash, narx kelishish).\n"
+            f"3. Murakkab atamalarni hayotiy, kundalik misollar orqali tushuntir.\n"
             f"4. Javobingni chiroyli formatda: emoji belgilar, qisqa xatboshilar va muhim nuqtalarni qalin (bold) qilib taqdim et.\n"
             f"5. Javob oxirida talabaga motivatsiya ber va mavzu bo'yicha bitta kichik amaliy maslahat qo'sh."
         )
@@ -195,9 +175,45 @@ class AITutorService:
         output_tokens = 220
         reply_text = ""
 
-        if self._client and settings.anthropic.api_key and not settings.debug:
+        # 1. PRIMARY: AGY / Google Gemini AI (Tavsiya etilgan eng tezkor model)
+        if settings.gemini.api_key:
             try:
-                response = await self._client.messages.create(
+                from google import genai
+                from google.genai import types
+
+                client = genai.Client(api_key=settings.gemini.api_key)
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.7,
+                    max_output_tokens=800,
+                )
+
+                # Format conversation history
+                contents: list[types.Content] = []
+                for m in messages:
+                    c_role = "user" if m["role"] == "user" else "model"
+                    contents.append(types.Content(role=c_role, parts=[types.Part.from_text(text=m["content"])]))
+
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini.model or "gemini-2.0-flash",
+                    contents=contents,
+                    config=config,
+                )
+                if response and response.text:
+                    reply_text = response.text.strip()
+                if hasattr(response, "usage_metadata") and response.usage_metadata:
+                    input_tokens = response.usage_metadata.prompt_token_count or 160
+                    output_tokens = response.usage_metadata.candidates_token_count or 220
+                logger.info("Gemini (AGY) AI muvaffaqiyatli javob qaytardi.")
+            except Exception as exc:
+                logger.warning("Gemini AI xatolik berdi, zaxira tizimga o'tilmoqda: %s", exc)
+
+        # 2. SECONDARY: Anthropic Claude (agar Gemini bo'lmasa yoki xato bersa)
+        if not reply_text and settings.anthropic.api_key and not settings.debug:
+            try:
+                from anthropic import AsyncAnthropic
+                claude_client = AsyncAnthropic(api_key=settings.anthropic.api_key)
+                response = await claude_client.messages.create(
                     model=settings.anthropic.model,
                     max_tokens=800,
                     system=system_prompt,
@@ -208,11 +224,13 @@ class AITutorService:
                     input_tokens = response.usage.input_tokens
                     output_tokens = response.usage.output_tokens
             except Exception as exc:
-                logger.exception("Claude AI javob berishda xatolik, kontekstli generator ishga tushdi: %s", exc)
-                reply_text = self._generate_contextual_response(domain_key, course_title, lesson_title, key_concepts, user_message)
-        else:
-            # High-precision Domain Context Generator for Local/Dev/Offline mode
-            reply_text = self._generate_contextual_response(domain_key, course_title, lesson_title, key_concepts, user_message)
+                logger.warning("Claude AI javob berishda xatolik: %s", exc)
+
+        # 3. FALLBACK: High-precision Domain Context Generator
+        if not reply_text:
+            reply_text = self._generate_contextual_response(
+                domain_key, course_title, lesson_title, key_concepts, user_message
+            )
 
         # 1000 ta token narxi taxminan 30 so'm (UZS)
         cost_sum = round((input_tokens * 0.02 + output_tokens * 0.08), 2)
@@ -233,8 +251,8 @@ class AITutorService:
             "answer": reply_text,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "total_tokens": input_tokens + output_tokens,
             "cost_sum": cost_sum,
+            "provider": "gemini" if settings.gemini.api_key else "fallback",
         }
 
     def _generate_contextual_response(
@@ -245,26 +263,17 @@ class AITutorService:
         key_concepts: str,
         question: str,
     ) -> str:
-        """Har bir kurs va dars bo'yicha to'liq kontekstli va chuqur amaliy javob generatori."""
-        q = question.lower()
+        q = question.lower().strip()
 
-        # 1. Xulosa va umumiy mazmun so'ralganda
-        if any(w in q for w in ["xulosa", "haqida", "mazmun", "umumiy", "qisqacha", "nima degani"]):
+        # 1. Dars xulosasi yoki tushuntirish so'ralganda
+        if any(w in q for w in ["tushuntir", "xulosa", "ma'no", "nima degani", "qisqacha", "mohiyat", "haqida"]):
             if domain_key == "logistika":
                 return (
-                    f"📌 **«{lesson_title}» darsining asosiy mazmuni va amaliy xulosasi:**\n\n"
-                    f"1. **Mavzuning o'rni:** {key_concepts}.\n"
-                    f"2. **Amaliy qoida:** Logistika va dispetcherlikda har bir daqiqa muhim. Yuk ma'lumotlarini aniq olish (hajm, og'irlik, yo'nalish) va furachiga to'g'ri yetkazish xatolarning 90% oldini oladi.\n"
-                    f"3. **Daromad kaliti:** Fraxt narxini to'g'ri hisoblab, yuk egasi va haydovchi o'rtasida o'z xizmat haqingizni (odatda 5-10% yoki fiks komissiya) kelishib oling.\n\n"
-                    f"💡 *Maslahat:* Darsdagi shablonlarni daftaringizga yozib oling va bugunoq birinchi qo'ng'iroqni sinab ko'ring! Yana qaysi qismiga tushunmadingiz?"
-                )
-            elif domain_key == "telegram":
-                return (
-                    f"🎯 **«{lesson_title}» darsi bo'yicha muhim xulosa:**\n\n"
-                    f"1. **Asosiy tamoyil:** {key_concepts}.\n"
-                    f"2. **Byudjet va CPV:** Telegram Ads da obunachini arzon jalb qilish uchun tor va to'g'ri kanallarni tanlash lozim.\n"
-                    f"3. **Konversiya:** Reklama matnida aniq taklif (Offer) va kuchli Call-to-Action (CTA) bo'lishi shart.\n\n"
-                    f"🚀 *Keyingi qadam:* Kichik byudjet bilan test reklama qo'yib, natijalarni tahlil qilib boring!"
+                    f"🚛 **«{lesson_title}» darsining asosiy mohiyati:**\n\n"
+                    f"1. **Asosiy qoida:** {key_concepts}.\n"
+                    f"2. **Dispetcher vazifasi:** Yuk beruvchi (klient) bilan haydovchi (fura egasi) o'rtasida ishonchli ko'prik bo'lish va har bir qatnovdan o'z komissiyangizni kafolatli olish.\n"
+                    f"3. **Hujjatlar:** Yuk jo'natishdan oldin TTN va haydovchi hujjatlarini (pasport, tex-pasport) to'liq tekshirish shart!\n\n"
+                    f"💡 *Maslahat:* Har bir reys bo'yicha ma'lumotlarni daftarga yoki Excelga yozib boring, bu hisob-kitobda adashmaslikni ta'minlaydi."
                 )
             elif domain_key == "xitoy":
                 return (

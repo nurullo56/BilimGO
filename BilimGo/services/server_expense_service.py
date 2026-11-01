@@ -19,21 +19,7 @@ class ServerExpenseService:
 
     async def resolve_student_mentor_id(self, student_id: int) -> int:
         """Talabaning shaxsiy ustozi (mentor_id)ni aniqlaydi."""
-        cursor = await self._repo._conn.execute(
-            """
-            SELECT ln.owner_user_id AS mentor_id
-            FROM cabinet_members cm
-            JOIN cabinets c ON c.id = cm.cabinet_id
-            JOIN license_nodes ln ON ln.id = c.owner_node_id
-            WHERE cm.user_id = ?
-            LIMIT 1
-            """,
-            (student_id,),
-        )
-        row = await cursor.fetchone()
-        if row and row["mentor_id"]:
-            return row["mentor_id"]
-        return 1
+        return await self._repo.resolve_student_mentor_id(student_id)
 
     async def track_video_stream(self, student_id: int, lesson_id: int, duration_sec: int = 300) -> None:
         """Shogird video darsni ko'rganida server trafigi va relay xarajatini ustoziga yozadi."""

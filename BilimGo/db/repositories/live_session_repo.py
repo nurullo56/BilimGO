@@ -127,3 +127,94 @@ class LiveSessionRepository(BaseRepository):
             (numeric_id, user_id),
         )
         await self._conn.commit()
+
+    async def expire_old_scheduled_sessions(self, cutoff_hours: int = 3) -> None:
+        """3 soatdan oshib ketgan rejalashtirilgan sessiyalarni avtomatik tugatish."""
+        modifier = f"-{cutoff_hours} hours"
+        await self._conn.execute(
+            """
+            UPDATE live_sessions
+            SET status = 'ended', ended_at = datetime('now')
+            WHERE status = 'scheduled'
+              AND datetime(scheduled_at) < datetime('now', ?)
+            """,
+            (modifier,),
+        )
+        await self._conn.commit()
+
+    async def list_upcoming_with_details(self, course_id: int) -> list[dict[str, Any]]:
+        """Kurs bo'yicha sessiyalar va ularning mentor/kurs ma'lumotlarini olish."""
+        cursor = await self._conn.execute(
+            """
+            SELECT ls.id, ls.course_id, ls.scheduled_at, ls.status, ls.join_method, ls.stream_ref,
+                   ls.title, ls.viewer_count,
+                   u.full_name AS instructor_name, c.title AS course_title
+            FROM live_sessions ls
+            LEFT JOIN users u ON u.id = ls.mentor_id
+            LEFT JOIN courses c ON c.id = ls.course_id
+            WHERE ls.course_id = ?
+            ORDER BY 
+                CASE 
+                    WHEN ls.status = 'live' THEN 1
+                    WHEN ls.status = 'scheduled' THEN 2
+                    ELSE 3
+                END,
+                ls.scheduled_at DESC
+            """,
+            (course_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_user_role(self, user_id: int) -> str | None:
+        """Foydalanuvchi rolini olish."""
+        cursor = await self._conn.execute(
+            "SELECT role FROM users WHERE id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        return row["role"] if row else None
+
+    async def get_course_active_students_audience(self, course_id: int) -> list[dict[str, Any]]:
+        """Kursdagi barcha faol talabalar (super admin jonli efiri uchun)."""
+        cursor = await self._conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id, u.full_name
+            FROM access_grants ag
+            JOIN users u ON u.id = ag.user_id
+            WHERE ag.course_id = ? AND ag.status = 'active'
+              AND u.telegram_id IS NOT NULL
+            """,
+            (course_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_mentor_course_audience_students(self, mentor_id: int, course_id: int) -> list[dict[str, Any]]:
+        """Quyi mentorga biriktirilgan shogirdlar (litsenziya va kabinet bo'yicha)."""
+        cursor = await self._conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id, u.full_name
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL 
+              AND u.status = 'active'
+              AND (
+                  u.id IN (
+                      SELECT ag.user_id 
+                      FROM access_grants ag
+                      JOIN sales s ON s.id = ag.granted_via_sale_id
+                      JOIN license_nodes ln ON ln.id = s.license_node_id
+                      WHERE ln.owner_user_id = ? AND ag.course_id = ? AND ag.status = 'active'
+                  )
+                  OR u.id IN (
+                      SELECT cm.user_id 
+                      FROM cabinet_members cm
+                      JOIN cabinets c ON c.id = cm.cabinet_id
+                      JOIN license_nodes ln ON ln.id = c.owner_node_id
+                      WHERE ln.owner_user_id = ? AND cm.role_in_cabinet = 'student'
+                  )
+              )
+            """,
+            (mentor_id, course_id, mentor_id),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]

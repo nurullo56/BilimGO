@@ -19,13 +19,18 @@ import { getTelegramInitData, getTelegramUser } from './telegram';
 
 // In-memory configuration store
 const getInitialApiBase = (): string => {
+  try {
+    if (typeof (import.meta as any) !== 'undefined' && (import.meta as any)?.env?.VITE_API_URL) {
+      return (import.meta as any).env.VITE_API_URL.replace(/\/+$/, '');
+    }
+  } catch {}
   if (typeof process !== 'undefined' && (process.env as any)?.VITE_API_URL) {
     return (process.env as any).VITE_API_URL.replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin;
-    const port = window.location.port;
-    if (port && ['3000', '5173', '5174', '5175', '4173', '8080'].includes(port)) {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000';
     }
     if (origin.startsWith('http://') || origin.startsWith('https://')) {

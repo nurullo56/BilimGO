@@ -53,18 +53,8 @@ class LessonCompletionService:
 
         # 2. Dars ko'rish progressini yozish
         # Agar user uchun dars ko'rish yozuvi bo'lmasa, yangi yaratish
-        cursor = await self._lesson_view_repo._conn.execute(
-            """
-            SELECT id FROM lesson_views
-            WHERE user_id = ? AND lesson_id = ?
-            ORDER BY id DESC LIMIT 1
-            """,
-            (user_id, lesson_id),
-        )
-        row = await cursor.fetchone()
-        if row:
-            view_id = row["id"]
-        else:
+        view_id = await self._lesson_view_repo.get_latest_view_id(user_id, lesson_id)
+        if not view_id:
             view_id = await self._lesson_view_repo.start_view(user_id, lesson_id)
 
         completion_percent = max(0, min(100, completion_percent))

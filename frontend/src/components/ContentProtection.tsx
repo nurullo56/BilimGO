@@ -27,17 +27,16 @@ export const ContentProtection: React.FC<ContentProtectionProps> = ({ user, chil
     // If admin (in .env), completely bypass all screenshot and recording protection
     if (isAdmin) return;
 
-    // 1. Anti-Screen Recording & App Switcher Blackout Protection
-    const handleBlur = () => {
+    // 1. Anti-Screen Recording & App Switcher Blackout Protection (visibilitychange only)
+    const handlePauseMedia = () => {
       setIsScreenProtected(true);
-      // Pause any playing media
       const videos = document.querySelectorAll('video');
       videos.forEach((v) => v.pause());
       const audios = document.querySelectorAll('audio');
       audios.forEach((a) => a.pause());
     };
 
-    const handleFocus = () => {
+    const handleResumeMedia = () => {
       setTimeout(() => {
         setIsScreenProtected(false);
       }, 150);
@@ -45,9 +44,9 @@ export const ContentProtection: React.FC<ContentProtectionProps> = ({ user, chil
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        handleBlur();
+        handlePauseMedia();
       } else {
-        handleFocus();
+        handleResumeMedia();
       }
     };
 
@@ -97,16 +96,13 @@ export const ContentProtection: React.FC<ContentProtectionProps> = ({ user, chil
       e.preventDefault();
     };
 
-    window.addEventListener('blur', handleBlur);
-    window.addEventListener('focus', handleFocus);
+    // Use visibilitychange instead of window.blur to prevent keyboard opening from blocking UI
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     window.addEventListener('keyup', handleKeyUp, { capture: true });
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
       window.removeEventListener('keyup', handleKeyUp, { capture: true });

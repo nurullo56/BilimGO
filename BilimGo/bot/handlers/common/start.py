@@ -18,6 +18,7 @@ from bot.handlers.common._utils import (
 )
 from bot.keyboards.admin import ADMIN_MENU, get_admin_inline_webapp
 from bot.keyboards.common import (
+    get_buy_course_keyboard,
     get_catalog_webapp_keyboard,
     get_direct_course_keyboard,
     get_profile_webapp_keyboard,
@@ -25,14 +26,11 @@ from bot.keyboards.common import (
 from bot.keyboards.mentor import MENTOR_MENU, get_mentor_inline_webapp
 from bot.keyboards.student import PHONE_REQUEST_KEYBOARD, STUDENT_MENU, get_student_inline_webapp
 from core.config import settings
-from db.database import database
-from db.repositories.cabinet_repo import CabinetRepository
-from db.repositories.chat_repo import ChatRepository
-from db.repositories.course_repo import CourseRepository
-from db.repositories.license_node_repo import LicenseNodeRepository
-from db.repositories.user_repo import User, UserRepository
+from db.repositories.user_repo import User
 from services.admin_notifier import AdminNotifier
 from services.cabinet_service import CabinetService
+from services.course_service import CourseService
+from services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 router = Router(name="registration")
@@ -54,14 +52,8 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
         import logging
         logging.exception("Jim xatolik (Swallowed Exception): %s", exc)
 
-    conn = database.conn
-    course_repo = CourseRepository(conn)
-    user_repo = UserRepository(conn)
-    license_node_repo = LicenseNodeRepository(conn)
-    cabinet_repo = CabinetRepository(conn)
-    chat_repo = ChatRepository(conn)
-
-    all_courses = await course_repo.list_published()
+    course_service = CourseService()
+    all_courses = await course_service.list_published()
     payload = command.args
 
     # 1. Telefon raqami yo'q bo'lsa
@@ -69,12 +61,12 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
         if payload:
             await state.update_data(referral_payload=payload)
 
-        target_cid, target_nid, _, _ = _parse_payload(payload)
+        target_cid, target_nid, _, _, _ = _parse_payload(payload)
         is_konkurs = False
         if target_cid == 3 or (payload and any(k in payload.lower() for k in ("konkurs", "aksiya"))):
             is_konkurs = True
         elif target_nid:
-            node_row = await license_node_repo.get_by_id(target_nid)
+            node_row = await CabinetService.create_default()._license_node_repo.get_by_id(target_nid)
             if node_row and node_row.course_id == 3:
                 is_konkurs = True
 
@@ -103,35 +95,20 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
         return
 
     # 2. Payload ni tahlil qilish
-    course_id, node_id, is_mentor_invite, mentor_target_id = _parse_payload(payload)
+    course_id, node_id, is_mentor_invite, mentor_target_id, is_direct_paid = _parse_payload(payload)
     mentor_info = ""
 
     # 3. Mentor onboarding
     if (is_mentor_invite or user.role == "mentor") and user.role != "admin":
-        await user_repo.update_role(user.id, "mentor")
-        user = await user_repo.get_by_id(user.id) or user
+        user_service = UserService()
+        await user_service.update_role(user.id, "mentor")
+        user = await user_service.get_by_id(user.id) or user
 
-        cursor = await conn.execute(
-            "SELECT id FROM license_nodes WHERE owner_user_id = ? LIMIT 1", (user.id,)
+        cabinet_service = CabinetService.create_default()
+        assigned_node_id, cabinet_name = await cabinet_service.get_or_create_mentor_node_and_cabinet(
+            mentor_user_id=user.id,
+            course_id=course_id or 1,
         )
-        existing_node = await cursor.fetchone()
-        assigned_node_id = existing_node["id"] if existing_node else None
-
-        if not assigned_node_id:
-            target_cid = course_id or 1
-            cur = await conn.execute(
-                "INSERT INTO license_nodes (parent_id, owner_user_id, course_id, royalty_percent, stage, status) "
-                "VALUES (1, ?, ?, 20.0, 'limit', 'active')",
-                (user.id, target_cid),
-            )
-            await conn.commit()
-            assigned_node_id = cur.lastrowid
-
-        cabinet_name = "Mentor Kabineti"
-        if assigned_node_id:
-            cabinet_service = CabinetService(cabinet_repo, chat_repo, license_node_repo, user_repo)
-            cab = await cabinet_service.get_or_create_for_node(assigned_node_id)
-            cabinet_name = cab.display_name
 
         await _notify_super_mentors_about_mentor_activation(
             bot=bot, mentor=user,
@@ -157,7 +134,7 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
         return
 
     # 4. Talabani mentor kabinetiga biriktirish
-    mentor_info, target_course = await _handle_student_mentor_binding(
+    mentor_info, target_course, is_direct_paid = await _handle_student_mentor_binding(
         bot, user, payload, from_tg_user=message.from_user
     )
 
@@ -185,14 +162,22 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
                 "Darslarni boshlash uchun quyidagi tugmani bosing 👇",
                 reply_markup=get_direct_course_keyboard(target_course.id),
             )
-        else:
+        elif is_direct_paid:
             await message.answer(
                 f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
                 f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
-                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                "🔓 Mentoringiz sizga ushbu kursning barcha darslari, audio/video materiallari va AI tyutorini <b>to'liq ochib berdi!</b>\n"
                 f"{mentor_info}\n"
                 "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
                 reply_markup=get_direct_course_keyboard(target_course.id),
+            )
+        else:
+            await message.answer(
+                f"Assalomu alaykum, <b>{display_name}</b>!\n\n"
+                f"👨‍🏫 Sizga <b>«{target_course.title}»</b> kursi tavsiya etildi.\n"
+                f"{mentor_info}\n\n"
+                "💳 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutoriga to'liq kirish huquqini olish uchun quyidagi tugma orqali xarid qilishingiz mumkin 👇",
+                reply_markup=get_buy_course_keyboard(target_course.id),
             )
         await message.answer("Quyidagi menyu orqali tezkor boshqarishingiz mumkin 👇", reply_markup=keyboard)
         return
@@ -219,8 +204,7 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
 
-    conn = database.conn
-    user_repo = UserRepository(conn)
+    user_service = UserService()
 
     full_name = None
     if contact.first_name:
@@ -229,14 +213,14 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
             parts.append(contact.last_name)
         full_name = " ".join(parts)
 
-    await user_repo.update_profile(user_id=user.id, full_name=full_name, phone=phone_number)
-    user = await user_repo.get_by_id(user.id) or user
+    await user_service.update_profile(user_id=user.id, full_name=full_name, phone=phone_number)
+    user = await user_service.get_by_id(user.id) or user
 
     data = await state.get_data()
     referral_payload = data.get("referral_payload")
     await state.clear()
 
-    mentor_info, target_course = await _handle_student_mentor_binding(
+    mentor_info, target_course, is_direct_paid = await _handle_student_mentor_binding(
         bot, user, referral_payload, from_tg_user=message.from_user
     )
 
@@ -255,19 +239,11 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
         logger.debug("Yangi a'zo xabarnomasini yuborishda xatolik: %s", ex)
 
     if user.role == "mentor":
-        cursor = await conn.execute(
-            "SELECT id FROM license_nodes WHERE owner_user_id = ? LIMIT 1", (user.id,)
-        )
-        node_row = await cursor.fetchone()
-        node_id = node_row["id"] if node_row else 1
-        cab_repo = CabinetRepository(conn)
-        ch_repo = ChatRepository(conn)
-        ln_repo = LicenseNodeRepository(conn)
-        cabinet_service = CabinetService(cab_repo, ch_repo, ln_repo, user_repo)
-        cab = await cabinet_service.get_or_create_for_node(node_id)
+        cabinet_service = CabinetService.create_default()
+        node_id, cabinet_name = await cabinet_service.get_or_create_mentor_node_and_cabinet(user.id)
         await _notify_super_mentors_about_mentor_activation(
             bot=bot, mentor=user, node_id=node_id,
-            cabinet_name=cab.display_name, from_tg_user=message.from_user,
+            cabinet_name=cabinet_name, from_tg_user=message.from_user,
         )
 
     if user.role == "admin" or message.from_user.id in settings.bot.admin_ids:
@@ -291,15 +267,24 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
                 "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
                 reply_markup=get_direct_course_keyboard(target_course.id),
             )
-        else:
+        elif is_direct_paid:
             await message.answer(
                 f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"
                 f"📱 Raqam: <code>{phone_number}</code>\n"
                 f"🎉 <b>Tabriklaymiz!</b> Siz <b>«{target_course.title}»</b> kursiga muvaffaqiyatli qabul qilindingiz.\n\n"
-                "🔓 Ushbu kursning barcha darslari, audio/video materiallari va AI tyutori siz uchun <b>to'liq ochildi!</b>\n"
+                "🔓 Mentoringiz sizga ushbu kursning barcha darslari, audio/video materiallari va AI tyutorini <b>to'liq ochib berdi!</b>\n"
                 f"{mentor_info}\n"
                 "Darslarni hoziroq boshlash uchun quyidagi tugmani bosing 👇",
                 reply_markup=get_direct_course_keyboard(target_course.id),
+            )
+        else:
+            await message.answer(
+                f"✅ <b>Telefon raqamingiz muvaffaqiyatli saqlandi!</b>\n\n"
+                f"📱 Raqam: <code>{phone_number}</code>\n"
+                f"👨‍🏫 Sizga <b>«{target_course.title}»</b> kursi tavsiya etildi.\n"
+                f"{mentor_info}\n\n"
+                "💳 Ushbu kursning barcha darslari, materiallari va AI tyutoriga to'liq kirish huquqini olish uchun quyidagi tugma orqali xarid qilishingiz mumkin 👇",
+                reply_markup=get_buy_course_keyboard(target_course.id),
             )
     else:
         await message.answer(

@@ -17,6 +17,61 @@ class BroadcastService:
     def __init__(self, broadcast_repo: Optional[BroadcastRepository] = None) -> None:
         self.repo = broadcast_repo or BroadcastRepository()
 
+    async def resolve_audience(self, target: str) -> List[int]:
+        """Broadcast yuboriladigan foydalanuvchilarning telegram_id ro'yxatini aniqlash."""
+        if target == "all":
+            return await self.repo.get_active_user_telegram_ids()
+
+        elif target == "mentors":
+            return await self.repo.get_active_mentor_telegram_ids()
+
+        elif target.startswith("mentor_direct_"):
+            try:
+                mid = int(target.replace("mentor_direct_", ""))
+                return await self.repo.get_user_telegram_id_by_id(mid)
+            except Exception as e:
+                logger.error("Target user ids (mentor direct) olishda xato (%s): %s", target, e)
+                return []
+
+        elif target.startswith("mentor_") and "_course_" in target:
+            try:
+                parts = target.split("_")
+                mentor_id = int(parts[1])
+                cid = int(parts[3])
+                return await self.repo.get_mentor_course_audience_telegram_ids(mentor_id, cid)
+            except Exception as e:
+                logger.error("Target user ids (mentor+course) olishda xato (%s): %s", target, e)
+                return []
+
+        elif target.startswith("mentor_"):
+            try:
+                mentor_id = int(target.replace("mentor_", ""))
+                return await self.repo.get_mentor_all_audience_telegram_ids(mentor_id)
+            except Exception as e:
+                logger.error("Target user ids (mentor all) olishda xato (%s): %s", target, e)
+                return []
+
+        elif target.startswith("course_students_"):
+            try:
+                cid = int(target.replace("course_students_", ""))
+                return await self.repo.get_course_students_telegram_ids(cid)
+            except Exception as e:
+                logger.error("Target user ids (course students) olishda xato (%s): %s", target, e)
+                return []
+
+        elif target.startswith("course_all_") or target.startswith("course_"):
+            try:
+                raw = target.replace("course_all_", "").replace("course_", "")
+                cid = int(raw)
+                return await self.repo.get_course_all_users_telegram_ids(cid)
+            except Exception as e:
+                logger.error("Target user ids olishda xato (%s): %s", target, e)
+                return []
+
+        return []
+
+        return []
+
     async def execute_broadcast(
         self,
         bot: Bot,
@@ -58,7 +113,9 @@ class BroadcastService:
 
             if progress_callback and (idx % 25 == 0 or idx == total):
                 try:
-                    await progress_callback(idx, total, sent)
+                    res = progress_callback(idx, total, sent, failed)
+                    if asyncio.iscoroutine(res):
+                        await res
                 except Exception:
                     pass
 
@@ -107,7 +164,9 @@ class BroadcastService:
 
             if progress_callback and (idx % 25 == 0 or idx == total):
                 try:
-                    await progress_callback(idx, total, sent)
+                    res = progress_callback(idx, total, sent, failed)
+                    if asyncio.iscoroutine(res):
+                        await res
                 except Exception:
                     pass
 

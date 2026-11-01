@@ -1,3 +1,6 @@
+"""
+Mentorlar uchun 15 kunlik bepul sinov davri limitlarini boshqarish handlerlari.
+"""
 from __future__ import annotations
 
 import html
@@ -16,39 +19,11 @@ from bot.keyboards.admin import (
 from bot.keyboards.mentor import get_mentor_inline_webapp
 from bot.states.fsm_states import AddQuotaStates
 from core.config import settings
-from db.database import database
-from db.repositories.course_repo import CourseRepository
-from db.repositories.license_node_repo import LicenseNodeRepository
-from db.repositories.tariff_quota_repo import TariffQuotaRepository
-from db.repositories.user_repo import User, UserRepository
+from db.repositories.user_repo import User
+from services.quota_service import QuotaService
 
 logger = logging.getLogger(__name__)
-
 router = Router(name="admin_quota")
-
-
-async def _get_mentors_list() -> list[dict]:
-    conn = database.conn
-    cursor = await conn.execute(
-        """
-        SELECT 
-            u.id as user_id,
-            u.full_name,
-            u.telegram_id,
-            u.phone,
-            ln.id as node_id,
-            ln.stage,
-            ln.status,
-            (SELECT COUNT(*) FROM cabinet_members cm WHERE cm.cabinet_id = cab.id AND cm.role_in_cabinet = 'student') as student_count
-        FROM license_nodes ln
-        JOIN users u ON u.id = ln.owner_user_id
-        LEFT JOIN cabinets cab ON cab.owner_node_id = ln.id
-        WHERE ln.id > 1
-        ORDER BY ln.id ASC
-        """
-    )
-    rows = await cursor.fetchall()
-    return [dict(r) for r in rows]
 
 
 # 1. Start Quota Management Flow
@@ -62,7 +37,8 @@ async def start_quota_management(message: Message, user: User, state: FSMContext
         return
 
     await state.clear()
-    mentors = await _get_mentors_list()
+    quota_service = QuotaService()
+    mentors = await quota_service.get_submentors_list()
     if not mentors:
         await message.answer(
             "⚠️ Hozircha tizimda quyi mentorlar mavjud emas.\n\n"
@@ -85,27 +61,26 @@ async def handle_choose_mentor_quota(callback: CallbackQuery, state: FSMContext)
     node_id = int(callback.data.split(":")[1])
     await state.clear()
 
-    conn = database.conn
-    node_repo = LicenseNodeRepository(conn)
-    user_repo = UserRepository(conn)
-    course_repo = CourseRepository(conn)
-    quota_repo = TariffQuotaRepository(conn)
-
-    node = await node_repo.get_by_id(node_id)
-    if not node:
+    quota_service = QuotaService()
+    overview = await quota_service.get_mentor_quota_overview(node_id)
+    if not overview:
         await callback.answer("Mentor litsenziya tuguni topilmadi.", show_alert=True)
         return
 
-    mentor_user = await user_repo.get_by_id(node.owner_user_id)
-    mentor_name = mentor_user.full_name if mentor_user else f"Mentor #{node.id}"
+    node = overview["node"]
+    mentor = overview["mentor"]
+    courses = overview["courses"]
+    quotas_list = overview["quotas_list"]
+    quotas_map = overview["quotas_map"]
 
-    courses = await course_repo.list_published()
-    quotas_list = await quota_repo.list_by_node(node.id)
-    quotas_map = {q.course_title: q for q in quotas_list}
-
-    stage_title = "⏳ 15 kunlik Limit davri (100% mentorga)" if node.stage == "limit" else "🤝 Hamkorlik davri (Royalti)"
+    mentor_name = mentor.full_name if mentor else f"Mentor #{node.id}"
+    stage_title = (
+        "⏳ 15 kunlik Limit davri (100% mentorga)"
+        if node.stage == "limit"
+        else "🤝 Hamkorlik davri (Royalti)"
+    )
     status_str = "✅ Faol" if node.status == "active" else "⛔️ To'xtatilgan"
-    
+
     lines = [
         f"👨‍🏫 <b>Mentor:</b> <b>{mentor_name}</b> (Node #{node.id})",
         f"📌 <b>Bosqich:</b> {stage_title}",
@@ -115,9 +90,13 @@ async def handle_choose_mentor_quota(callback: CallbackQuery, state: FSMContext)
 
     if quotas_list:
         for q in quotas_list:
-            lines.append(f"• <b>{q.course_title}:</b> {q.remaining}/{q.total_quota} ta qoldi (ishlatilgan: {q.used_quota} ta)")
+            lines.append(
+                f"• <b>{q.course_title}:</b> {q.remaining}/{q.total_quota} ta qoldi (ishlatilgan: {q.used_quota} ta)"
+            )
     else:
-        lines.append("<i>Hozircha kurslar bo'yicha limitlar ochilmagan. Kursni tanlasangiz, yangi limit ochiladi.</i>")
+        lines.append(
+            "<i>Hozircha kurslar bo'yicha limitlar ochilmagan. Kursni tanlasangiz, yangi limit ochiladi.</i>"
+        )
 
     lines.append("\n👇 <b>Qaysi kurs yo'nalishiga limit qo'shmoqchisiz?</b>")
 
@@ -138,23 +117,22 @@ async def handle_choose_course_quota(callback: CallbackQuery, state: FSMContext)
     node_id = int(parts[1])
     course_id = int(parts[2])
 
-    conn = database.conn
-    course_repo = CourseRepository(conn)
-    user_repo = UserRepository(conn)
-    node_repo = LicenseNodeRepository(conn)
-    quota_repo = TariffQuotaRepository(conn)
-
-    course = await course_repo.get_by_id(course_id)
-    node = await node_repo.get_by_id(node_id)
-    mentor = await user_repo.get_by_id(node.owner_user_id) if node else None
-
-    if not course or not node or not mentor:
+    quota_service = QuotaService()
+    prompt_data = await quota_service.get_course_quota_prompt_data(node_id, course_id)
+    if not prompt_data:
         await callback.answer("Ma'lumot topilmadi.", show_alert=True)
         return
 
-    quota = await quota_repo.get_quota_for_course(node.id, course.title)
-    remaining_info = f" (Hozirda: {quota.remaining}/{quota.total_quota} ta qolgan)" if quota else " (Hali limit belgilanmagan)"
+    node = prompt_data["node"]
+    mentor = prompt_data["mentor"]
+    course = prompt_data["course"]
+    quota = prompt_data["quota"]
 
+    remaining_info = (
+        f" (Hozirda: {quota.remaining}/{quota.total_quota} ta qolgan)"
+        if quota
+        else " (Hali limit belgilanmagan)"
+    )
     mentor_name = mentor.full_name or f"Mentor #{node.id}"
     kb = get_quota_amount_keyboard(node_id=node.id, course_id=course.id)
 
@@ -180,7 +158,7 @@ async def handle_add_preset_quota(callback: CallbackQuery, bot: Bot, state: FSMC
 
     await state.clear()
     await _apply_quota_addition(
-        callback=callback,
+        event=callback,
         bot=bot,
         node_id=node_id,
         course_id=course_id,
@@ -197,7 +175,6 @@ async def handle_custom_quota_prompt(callback: CallbackQuery, state: FSMContext)
 
     await state.set_state(AddQuotaStates.entering_amount)
     await state.update_data(node_id=node_id, course_id=course_id)
-
     await callback.message.edit_text(
         "✍️ <b>Qo'shmoqchi bo'lgan dostup miqdorini raqamda kiriting:</b>\n\n"
         "<i>(Masalan: <code>15</code> yoki <code>25</code>)</i>\n\n"
@@ -230,95 +207,41 @@ async def process_custom_quota_input(message: Message, bot: Bot, state: FSMConte
         await message.answer("Xatolik yuz berdi. Iltimos qaytadan boshlang.", reply_markup=ADMIN_MENU)
         return
 
-    conn = database.conn
-    course_repo = CourseRepository(conn)
-    node_repo = LicenseNodeRepository(conn)
-    user_repo = UserRepository(conn)
-    quota_repo = TariffQuotaRepository(conn)
-
-    course = await course_repo.get_by_id(course_id)
-    node = await node_repo.get_by_id(node_id)
-    mentor = await user_repo.get_by_id(node.owner_user_id) if node else None
-
-    if not course or not node or not mentor:
-        await message.answer("Mentor yoki kurs topilmadi.", reply_markup=ADMIN_MENU)
-        return
-
-    # Qo'shish
-    updated_quota = await quota_repo.add_quota_amount(
-        node_id=node.id,
-        course_title=course.title,
+    await _apply_quota_addition(
+        event=message,
+        bot=bot,
+        node_id=node_id,
+        course_id=course_id,
         add_amount=amount,
-        tariff_name="standart",
-        course_id=course.id,
     )
-
-    mentor_name = html.escape(mentor.full_name or f"Mentor #{node.id}")
-    course_title = html.escape(course.title)
-
-    # Super Adminga hisobot
-    admin_success_msg = (
-        f"✅ <b>Limit muvaffaqiyatli qo'shildi!</b> 🎉\n\n"
-        f"👤 <b>Mentor:</b> <b>{mentor_name}</b> (ID: <code>{mentor.telegram_id}</code>)\n"
-        f"📚 <b>Kurs:</b> «{course_title}»\n"
-        f"➕ <b>Qo'shilgan dostuplar:</b> <b>+{amount} ta</b>\n"
-        f"📊 <b>Yangi jami limit:</b> <b>{updated_quota.remaining}/{updated_quota.total_quota} ta qoldi</b> (ishlatilgan: {updated_quota.used_quota} ta)"
-    )
-    await message.answer(admin_success_msg, reply_markup=ADMIN_MENU, parse_mode="HTML")
-
-    # Mentorga xushxabar yuborish
-    mentor_notify_msg = (
-        f"🎉 <b>Sizga yangi bepul dostup limiti qo'shildi!</b> 🎁\n\n"
-        f"Hurmatli <b>{mentor_name}</b>, Bosh Mentor (Super Admin) tomonidan 15 kunlik ta'lim davringiz uchun "
-        f"<b>«{course_title}»</b> kursi bo'yicha <b>+{amount} ta</b> qo'shimcha dostup ajratildi!\n\n"
-        f"📊 <b>Joriy limitingiz:</b> <b>{updated_quota.remaining}/{updated_quota.total_quota} ta qoldi</b> (ishlatilgan: {updated_quota.used_quota} ta)\n\n"
-        f"💰 <i>Eslatma: 15 kunlik limit davrida o'quvchilaringizga sotilgan barcha kurslardan 100% daromad to'liq o'zingizda qoladi!</i>\n\n"
-        f"🚀 <i>Shaxsiy sotuv havolalaringizni olish uchun botdagi «🔗 Kurslarim sotuv havolalari» tugmasidan foydalaning.</i>"
-    )
-    if mentor.telegram_id:
-        try:
-            await bot.send_message(
-                chat_id=mentor.telegram_id,
-                text=mentor_notify_msg,
-                reply_markup=get_mentor_inline_webapp(settings.webapp.base_url),
-                parse_mode="HTML",
-            )
-            logger.info("Mentor %s ga +%s quota qo'shilganligi haqida xabar yuborildi.", mentor.telegram_id, amount)
-        except Exception as e:
-            logger.warning("Mentor %s ga bildirishnoma yuborishda xatolik: %s", mentor.telegram_id, e)
 
 
 async def _apply_quota_addition(
-    callback: CallbackQuery,
+    event: CallbackQuery | Message,
     bot: Bot,
     node_id: int,
     course_id: int,
     add_amount: int,
 ) -> None:
-    conn = database.conn
-    course_repo = CourseRepository(conn)
-    node_repo = LicenseNodeRepository(conn)
-    user_repo = UserRepository(conn)
-    quota_repo = TariffQuotaRepository(conn)
-
-    course = await course_repo.get_by_id(course_id)
-    node = await node_repo.get_by_id(node_id)
-    mentor = await user_repo.get_by_id(node.owner_user_id) if node else None
-
-    if not course or not node or not mentor:
-        await callback.answer("Mentor yoki kurs topilmadi.", show_alert=True)
-        return
-
-    # Bepul dostup qo'shish
-    updated_quota = await quota_repo.add_quota_amount(
-        node_id=node.id,
-        course_title=course.title,
-        add_amount=add_amount,
-        tariff_name="standart",
-        course_id=course.id,
+    quota_service = QuotaService()
+    res = await quota_service.add_quota_to_mentor(
+        node_id=node_id,
+        course_id=course_id,
+        amount=add_amount,
     )
 
-    mentor_name = html.escape(mentor.full_name or f"Mentor #{node.id}")
+    if not res:
+        if isinstance(event, CallbackQuery):
+            await event.answer("Mentor yoki kurs topilmadi.", show_alert=True)
+        else:
+            await event.answer("Mentor yoki kurs topilmadi.", reply_markup=ADMIN_MENU)
+        return
+
+    mentor = res["mentor"]
+    course = res["course"]
+    updated_quota = res["updated_quota"]
+
+    mentor_name = html.escape(mentor.full_name or f"Mentor #{node_id}")
     course_title = html.escape(course.title)
 
     admin_success_msg = (
@@ -329,8 +252,11 @@ async def _apply_quota_addition(
         f"📊 <b>Yangi jami limit:</b> <b>{updated_quota.remaining}/{updated_quota.total_quota} ta qoldi</b> (ishlatilgan: {updated_quota.used_quota} ta)"
     )
 
-    await callback.message.edit_text(admin_success_msg, parse_mode="HTML")
-    await callback.answer(f"+{add_amount} ta dostup qo'shildi!", show_alert=True)
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_text(admin_success_msg, parse_mode="HTML")
+        await event.answer(f"+{add_amount} ta dostup qo'shildi!", show_alert=True)
+    else:
+        await event.answer(admin_success_msg, reply_markup=ADMIN_MENU, parse_mode="HTML")
 
     # Mentorga xushxabar yuborish
     mentor_notify_msg = (
@@ -358,7 +284,8 @@ async def _apply_quota_addition(
 @router.callback_query(F.data == "quota_back_mentors")
 async def handle_quota_back_to_mentors(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    mentors = await _get_mentors_list()
+    quota_service = QuotaService()
+    mentors = await quota_service.get_submentors_list()
     kb = get_quota_mentors_keyboard(mentors)
     await callback.message.edit_text(
         "🎁 <b>Mentorlarga Bepul Dostup Limitini Qo'shish</b> (15 kunlik limit davri)\n\n"

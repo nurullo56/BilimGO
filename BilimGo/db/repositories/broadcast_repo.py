@@ -34,3 +34,117 @@ class BroadcastRepository:
             (sent_count, failed_count, status, broadcast_id),
         )
         await self.db.conn.commit()
+
+    async def get_active_user_telegram_ids(self) -> list[int]:
+        """Barcha faol foydalanuvchilarning telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            "SELECT DISTINCT telegram_id FROM users WHERE status = 'active' AND telegram_id IS NOT NULL"
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+    async def get_active_mentor_telegram_ids(self) -> list[int]:
+        """Barcha faol mentorlarning telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            "SELECT DISTINCT telegram_id FROM users WHERE role = 'mentor' AND status = 'active' AND telegram_id IS NOT NULL"
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+    async def get_user_telegram_id_by_id(self, user_id: int) -> list[int]:
+        """Muayyan foydalanuvchining telegram_id ro'yxati (1 ta element yoki bo'sh)."""
+        cursor = await self.db.conn.execute(
+            "SELECT telegram_id FROM users WHERE id = ? AND status = 'active' AND telegram_id IS NOT NULL",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return [row["telegram_id"]] if row and row["telegram_id"] else []
+
+    async def get_mentor_course_audience_telegram_ids(self, mentor_id: int, course_id: int) -> list[int]:
+        """Muayyan mentorning ma'lum kursdagi shogirdlari telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL AND u.status = 'active' AND (
+                u.id IN (
+                    SELECT ag.user_id FROM access_grants ag
+                    JOIN sales s ON s.id = ag.granted_via_sale_id
+                    JOIN license_nodes ln ON ln.id = s.license_node_id
+                    WHERE ln.owner_user_id = ? AND ag.course_id = ? AND ag.status = 'active'
+                )
+                OR u.id IN (
+                    SELECT cm.user_id FROM cabinet_members cm
+                    JOIN cabinets c ON c.id = cm.cabinet_id
+                    JOIN license_nodes ln ON ln.id = c.owner_node_id
+                    WHERE ln.owner_user_id = ? AND cm.role_in_cabinet = 'student'
+                )
+            )
+            """,
+            (mentor_id, course_id, mentor_id),
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+    async def get_mentor_all_audience_telegram_ids(self, mentor_id: int) -> list[int]:
+        """Muayyan mentorning barcha shogirdlari telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL AND u.status = 'active' AND (
+                u.id IN (
+                    SELECT ag.user_id FROM access_grants ag
+                    JOIN sales s ON s.id = ag.granted_via_sale_id
+                    JOIN license_nodes ln ON ln.id = s.license_node_id
+                    WHERE ln.owner_user_id = ? AND ag.status = 'active'
+                )
+                OR u.id IN (
+                    SELECT cm.user_id FROM cabinet_members cm
+                    JOIN cabinets c ON c.id = cm.cabinet_id
+                    JOIN license_nodes ln ON ln.id = c.owner_node_id
+                    WHERE ln.owner_user_id = ? AND cm.role_in_cabinet = 'student'
+                )
+            )
+            """,
+            (mentor_id, mentor_id),
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+    async def get_course_students_telegram_ids(self, course_id: int) -> list[int]:
+        """Kursdagi oddiy talabalarning (mentor/admin bo'lmagan) telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL 
+              AND u.status = 'active'
+              AND (u.role IS NULL OR u.role NOT IN ('mentor', 'super_mentor', 'admin'))
+              AND u.id IN (
+                SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                UNION
+                SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+            )
+            """,
+            (course_id, course_id),
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+    async def get_course_all_users_telegram_ids(self, course_id: int) -> list[int]:
+        """Kursdagi barcha faol foydalanuvchilarning telegram_id ro'yxati."""
+        cursor = await self.db.conn.execute(
+            """
+            SELECT DISTINCT u.telegram_id
+            FROM users u
+            WHERE u.telegram_id IS NOT NULL AND u.status = 'active' AND u.id IN (
+                SELECT user_id FROM access_grants WHERE course_id = ? AND status = 'active'
+                UNION
+                SELECT user_id FROM lesson_views lv JOIN lessons l ON l.id = lv.lesson_id WHERE l.course_id = ?
+            )
+            """,
+            (course_id, course_id),
+        )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]

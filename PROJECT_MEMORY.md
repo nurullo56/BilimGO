@@ -148,3 +148,68 @@
 ## 🎯 Joriy Holat va Qoidalar
 - Kod yozishda to'g'ri UTF-8 va Unicode emojilardan (📦, 🤖, 🎯, 💾, 🛑, ✅) foydalaning.
 - Mojibake yoki buzuq harflar yozish qat'iyan taqiqlanadi.
+
+## 🏛️ Clean Architecture va Qatlamlar Ajratilishi (QAT'IY QOIDA)
+
+Ushbu loyihada qat'iy ravishda **Clean Architecture** va **Separation of Concerns (SoC)** tamoyillariga amal qilinadi. Yangi funksiya yozishda yoki mavjud kodni o'zgartirishda quyidagi qoidalardan chetga chiqish QAT'IYAN TAQIQLANADI:
+
+### 1. Qatlamlar Taqsimoti va Majburiyatlari:
+
+1. **Repozitoriylar (`db/repositories/`) — Ma'lumotlar Bazasi Qatlami:**
+   - Barcha xom SQL so'rovlari (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `JOIN`, tranzaksiyalar) **FAQAT va FAQAT** shu qatlamda bo'ladi.
+   - Har bir repozitoriy o'z domeniga tegishli jadval bilan ishlaydi va natijani toza model (dataclass) yoki ma'lumotlar to'plami (dict/list) shaklida qaytaradi.
+
+2. **Servislar (`services/`) — Biznes Mantiq Qatlami:**
+   - Barcha biznes qoidalar, tekshiruvlar, hisob-kitoblar, limitlar, muddatlar va bir nechta repozitoriylarni muvofiqlashtirish shu yerda bajariladi.
+   - 🛑 **QAT'IY TAQIQ:** Servislar ichida to'g'ridan-to'g'ri `conn.execute(...)`, `SELECT ...`, `UPDATE ...` kabi xom SQL yozish 100% taqiqlanadi! Har qanday DB amali tegishli repozitoriy metodi orqali bajarilishi shart.
+   - Har bir servisda markazlashgan `create_default(cls, conn=None)` zavod (factory) metodi bo'lishi shart.
+
+3. **Routerlar (`web/routers/`) — Web / HTTP Qatlami:**
+   - Routerlar faqat "Yupqa Controller" (Thin Controller) vazifasini bajaradi: HTTP parametrlarini tekshirish (Pydantic validation), kerakli servisni chaqirish va javob qaytarish (3-5 qatordan oshmasligi kerak).
+   - 🛑 **QAT'IY TAQIQ:** Routerlar ichida xom SQL yozish, `database.conn` dan foydalanish yoki to'g'ridan-to'g'ri repozitoriy bilan murakkab biznes amallarini bajarish 100% taqiqlanadi! Barchasi `Depends(Service.create_default)` orqali servisga topshiriladi.
+
+4. **Bot Handlerlar (`bot/handlers/`) — Telegram Foydalanuvchi Qatlami:**
+   - Faqat Telegram xabarlarini qabul qilish, inline klaviaturalarni ko'rsatish va FSM holatlarini boshqarish.
+   - 🛑 **QAT'IY TAQIQ:** Handlerlar ichida xom SQL yozilmaydi, biznes amallar servislar orqali amalga oshiriladi.
+
+---
+
+### 2. Yangi Imkoniyat Qo'shishning Qat'iy Ketma-ketligi (3 Qadam):
+
+Har qanday yangi funksiya yoki endpoint quyidagi ketma-ketlikda yoziladi:
+1. **1-qadam (DB):** Kerakli SQL so'rovni `db/repositories/` dagi tegishli faylga metod qilib qo'shish.
+2. **2-qadam (Logika):** `services/` dagi tegishli servisga repozitoriyni chaqiruvchi va biznes mantiqni bajaruvchi metod yozish.
+3. **3-qadam (Taqdimot):** `web/routers/` yoki `bot/handlers/` da ushbu servis metodini qisqagina chaqirib qo'yish.
+
+---
+
+### 3. Noto'g'ri va To'g'ri Yondashuv Misoli:
+
+❌ **NOTO'G'RI (Buzilgan arxitektura):**
+```python
+# web/routers/course.py yoki services/course_service.py ichida:
+@router.get("/students")
+async def get_students(course_id: int):
+    # TO'G'RIDAN-TO'G'RI SQL YOZISH TAQIQLANADI!
+    cursor = await database.conn.execute("SELECT * FROM users WHERE course_id = ?", (course_id,))
+    return await cursor.fetchall()
+```
+
+✅ **TO'G'RI (Clean Architecture):**
+```python
+# 1. db/repositories/access_grant_repo.py
+async def get_course_students(self, course_id: int) -> list[dict]:
+    cursor = await self._conn.execute("SELECT * FROM users WHERE course_id = ?", (course_id,))
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+# 2. services/course_service.py
+async def get_students_list(self, course_id: int) -> list[dict]:
+    # Biznes mantiq, tekshiruvlar shu yerda
+    return await self._access_grant_repo.get_course_students(course_id)
+
+# 3. web/routers/course.py
+@router.get("/students")
+async def get_students(course_id: int, service: CourseService = Depends(CourseService.create_default)):
+    return await service.get_students_list(course_id)
+```

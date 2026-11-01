@@ -5,6 +5,7 @@ Re-exports all shared keyboard functions for backward compatibility.
 
 from bot.keyboards.common.onboarding_kb import (
     get_direct_course_keyboard,
+    get_buy_course_keyboard,
 )
 from bot.keyboards.common.mentor_assign_kb import (
     get_mentor_assignment_courses_keyboard,
@@ -21,6 +22,7 @@ from bot.keyboards.common.cabinet_kb import (
 __all__ = [
     # onboarding
     "get_direct_course_keyboard",
+    "get_buy_course_keyboard",
     # mentor assign
     "get_mentor_assignment_courses_keyboard",
     "get_mentor_tariff_keyboard",

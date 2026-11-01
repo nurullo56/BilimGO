@@ -92,6 +92,12 @@ class AnthropicConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class GeminiConfig:
+    api_key: str
+    model: str = "gemini-2.0-flash"
+
+
+@dataclass(frozen=True, slots=True)
 class PathConfig:
     userbot_db_path: Path
     downloads_dir: Path
@@ -107,6 +113,8 @@ class Settings:
     click: ClickConfig
     payme: PaymeConfig
     anthropic: AnthropicConfig
+    gemini: GeminiConfig
+    ai_provider: str
     webapp: WebAppConfig
     paths: PathConfig
     debug: bool
@@ -137,13 +145,14 @@ def load_settings() -> Settings:
         else BASE_DIR.parent / "frontend" / "dist"
     )
 
+    group_id_val = os.getenv("SUPER_MENTOR_GROUP_ID")
+    group_id = int(group_id_val) if group_id_val and group_id_val.strip() else -1004369887420
+
     return Settings(
         bot=BotConfig(
             token=_require("BOT_TOKEN"),
             admin_ids=admin_ids,
-            group_id=int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
-            if os.getenv("SUPER_MENTOR_GROUP_ID")
-            else None,
+            group_id=group_id,
             topic_mentor_apps=int(os.getenv("MENTOR_APPLICATIONS_TOPIC_ID", "2")),
             topic_payment_receipts=int(os.getenv("PAYMENT_RECEIPTS_TOPIC_ID", "4")),
             topic_statistics=int(os.getenv("STATISTICS_TOPIC_ID", "8")),
@@ -173,9 +182,14 @@ def load_settings() -> Settings:
         ),
         anthropic=AnthropicConfig(
             api_key=os.getenv("ANTHROPIC_API_KEY", ""),
-            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5"),
+            model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
             poll_interval_seconds=int(os.getenv("AI_EVAL_POLL_INTERVAL_SECONDS", "15")),
         ),
+        gemini=GeminiConfig(
+            api_key=os.getenv("GEMINI_API_KEY", ""),
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+        ),
+        ai_provider=os.getenv("AI_PROVIDER", "gemini").lower(),
         webapp=WebAppConfig(
             base_url=os.getenv("WEBAPP_BASE_URL", "https://bilimgo.example.com"),
         ),

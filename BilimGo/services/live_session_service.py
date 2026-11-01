@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from core.config import settings
 from core.exceptions import AccessDeniedError, NotFoundError
 from db.repositories.access_grant_repo import AccessGrantRepository
 from db.repositories.live_session_repo import LiveSession, LiveSessionRepository
@@ -20,6 +21,18 @@ class LiveSessionService:
     ) -> None:
         self._live_repo = live_repo
         self._access_grant_repo = access_grant_repo
+
+    @classmethod
+    def create_default(cls, conn=None) -> "LiveSessionService":
+        from db.database import database
+        from db.repositories.access_grant_repo import AccessGrantRepository
+        from db.repositories.live_session_repo import LiveSessionRepository
+
+        c = conn or database.conn
+        return cls(
+            live_repo=LiveSessionRepository(c),
+            access_grant_repo=AccessGrantRepository(c),
+        )
 
     async def schedule(
         self,
@@ -42,43 +55,15 @@ class LiveSessionService:
 
     async def list_upcoming(self, course_id: int | str) -> List[Dict[str, Any]]:
         """Kurs bo'yicha faol yoki rejalashtirilgan sessiyalar ro'yxatini olish."""
-        conn = self._live_repo._conn
         try:
             clean_course_id = int(str(course_id).replace("course-", ""))
         except ValueError:
             clean_course_id = 1
 
         # 3 soatdan oshib ketgan rejalashtirilgan sessiyalarni avtomatik tugatish
-        await conn.execute(
-            """
-            UPDATE live_sessions
-            SET status = 'ended', ended_at = datetime('now')
-            WHERE status = 'scheduled'
-              AND datetime(scheduled_at) < datetime('now', '-3 hours')
-            """
-        )
-        await conn.commit()
+        await self._live_repo.expire_old_scheduled_sessions(cutoff_hours=3)
 
-        cursor = await conn.execute(
-            """
-            SELECT ls.id, ls.course_id, ls.scheduled_at, ls.status, ls.join_method, ls.stream_ref,
-                   ls.title, ls.viewer_count,
-                   u.full_name AS instructor_name, c.title AS course_title
-            FROM live_sessions ls
-            LEFT JOIN users u ON u.id = ls.mentor_id
-            LEFT JOIN courses c ON c.id = ls.course_id
-            WHERE ls.course_id = ?
-            ORDER BY 
-                CASE 
-                    WHEN ls.status = 'live' THEN 1
-                    WHEN ls.status = 'scheduled' THEN 2
-                    ELSE 3
-                END,
-                ls.scheduled_at DESC
-            """,
-            (clean_course_id,),
-        )
-        rows = await cursor.fetchall()
+        rows = await self._live_repo.list_upcoming_with_details(clean_course_id)
 
         return [
             {
@@ -133,11 +118,8 @@ class LiveSessionService:
         )
         if not has_access:
             # Agar mentor yoki admin bo'lsa kirishga ruxsat
-            user_row = await self._live_repo._conn.execute(
-                "SELECT role FROM users WHERE id = ?", (user_id,)
-            )
-            u = await user_row.fetchone()
-            if not u or u["role"] not in ("admin", "mentor", "super_mentor"):
+            role = await self._live_repo.get_user_role(user_id)
+            if role not in ("admin", "mentor", "super_mentor"):
                 raise AccessDeniedError("Ushbu kursga kirish huquqi yo'q")
 
         await self._live_repo.record_join(clean_id, user_id)
@@ -152,3 +134,30 @@ class LiveSessionService:
         """Sessiyadan chiqishni qayd etish."""
         clean_id = str(session_id).replace("live_", "").replace("live-", "")
         await self._live_repo.record_leave(clean_id, user_id)
+
+    async def get_session_audience_students(
+        self, session_id: int | str, mentor_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Jonli efir bildirishnomasi yuboriladigan talabalar ro'yxatini olish.
+        Maxfiylik va xavfsizlik kafolatlangan:
+        - Agar Super Admin bo'lsa (admin_ids yoki mentor_id == 1): Ushbu kursdagi barcha faol talabalarga yuboriladi.
+        - Agar quyi mentor bo'lsa: FAQAT shu mentorning o'ziga biriktirilgan (litsenziya tuguni yoki kabineti a'zosi bo'lgan) talabalarga yuboriladi.
+        Hech qachon boshqa begona mentorlar yoki butun platforma talabalariga xabar ketmaydi.
+        """
+        clean_id = str(session_id).replace("live_", "").replace("live-", "")
+        session_info = await live_manager.get_session_info(clean_id)
+        if session_info:
+            course_id = session_info.get("course_id", 1)
+        else:
+            session_db = await self._live_repo.get_by_id(clean_id)
+            course_id = session_db.course_id if session_db else 1
+
+        admin_ids = getattr(settings.bot, "admin_ids", []) or []
+        is_admin = mentor_id in admin_ids or mentor_id == 1
+
+        if is_admin:
+            return await self._live_repo.get_course_active_students_audience(course_id)
+
+        # Quyi mentor: faqat ushbu mentorga tegishli shogirdlar (litsenziya va kabinet bo'yicha)
+        return await self._live_repo.get_mentor_course_audience_students(mentor_id, course_id)

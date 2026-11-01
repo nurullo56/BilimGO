@@ -116,3 +116,15 @@ class MentorApplicationRepository(BaseRepository):
         )
         await self._conn.commit()
         logger.info("Mentorlik arizasi holati yangilandi: id=%s, status=%s", app_id, status)
+
+    async def submit_receipt(self, app_id: int, photo_id: str) -> None:
+        await self._conn.execute(
+            """
+            UPDATE mentor_applications
+            SET receipt_photo_id = ?, status = 'receipt_submitted'
+            WHERE id = ?
+            """,
+            (photo_id, app_id),
+        )
+        await self._conn.commit()
+        logger.info("Mentorlik to'lov cheki qabul qilindi: id=%s, photo_id=%s", app_id, photo_id)

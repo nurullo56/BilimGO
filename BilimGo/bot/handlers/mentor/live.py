@@ -13,9 +13,10 @@ from bot.keyboards.mentor import (
 )
 from bot.states.fsm_states import ScheduleLiveStates
 from core.config import settings
-from db.database import database
-from db.repositories.course_repo import CourseRepository
+from db.repositories.admin_repo import AdminRepository
 from db.repositories.user_repo import User
+from services.course_service import CourseService
+from services.live_session_service import LiveSessionService
 from services.live_stream_service import live_manager
 
 logger = logging.getLogger(__name__)
@@ -26,23 +27,12 @@ router = Router(name="mentor_live")
 async def _get_mentor_courses(mentor_id: int) -> list[any]:
     admin_ids = getattr(settings.bot, "admin_ids", [])
     if mentor_id in admin_ids or mentor_id == 1:
-        return await CourseRepository(database.conn).list_published()
+        return await CourseService().list_published()
 
-    cursor = await database.conn.execute(
-        """
-        SELECT c.id, c.title
-        FROM courses c
-        JOIN license_nodes ln ON ln.course_id = c.id OR ln.parent_id IS NULL
-        WHERE ln.owner_user_id = ?
-        GROUP BY c.id
-        """,
-        (mentor_id,),
-    )
-    rows = await cursor.fetchall()
-    if not rows:
-        # Fallback to list published courses if admin or direct mentor
-        rows = await CourseRepository(database.conn).list_published()
-    return rows
+    _, courses, _ = await AdminRepository().get_mentor_courses_and_counts(mentor_id)
+    if not courses:
+        return await CourseService().list_published()
+    return courses
 
 
 @router.message(F.text == "🔴 Live dars belgilash")
@@ -105,7 +95,7 @@ async def enter_datetime(message: Message, user: User, state: FSMContext, bot: B
     data = await state.get_data()
     course_id = data.get("course_id", 1)
 
-    course = await CourseRepository(database.conn).get_by_id(course_id)
+    course = await CourseService().get_by_id(course_id)
     course_title = course.title if course else f"Kurs #{course_id}"
 
     try:
@@ -149,29 +139,11 @@ async def notify_students(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer("❌ Sessiya topilmadi!", show_alert=True)
         return
 
-    conn = database.conn
-    cursor = await conn.execute(
-        """
-        SELECT DISTINCT u.telegram_id, u.full_name
-        FROM access_grants ag
-        JOIN users u ON u.id = ag.user_id
-        WHERE ag.course_id = ? AND ag.status = 'active'
-        """,
-        (session.get("course_id"),),
+    live_service = LiveSessionService.create_default()
+    students = await live_service.get_session_audience_students(
+        session_id=session_id,
+        mentor_id=callback.from_user.id,
     )
-    students = await cursor.fetchall()
-
-    if not students:
-        # Fallback to cabinet members
-        cursor2 = await conn.execute(
-            """
-            SELECT DISTINCT u.telegram_id, u.full_name
-            FROM cabinet_members cm
-            JOIN users u ON u.id = cm.user_id
-            WHERE cm.role_in_cabinet = 'student'
-            """
-        )
-        students = await cursor2.fetchall()
 
     if not students:
         await callback.answer("⚠️ Talabalar topilmadi!", show_alert=True)

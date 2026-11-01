@@ -125,8 +125,8 @@ export function applyTelegramTheme() {
   // 1. Telegram uzatgan rang eng ustuvor hisoblanadi (Telegram oq bo'lsa, 100% yorug' rejim bo'ladi)
   if (theme?.bg_color) {
     isDark = isHexColorDark(theme.bg_color);
-  } else if (webApp?.colorScheme) {
-    isDark = webApp.colorScheme === 'dark';
+  } else if ((webApp as any)?.colorScheme) {
+    isDark = (webApp as any).colorScheme === 'dark';
   } else {
     // 2. Agar Telegram ma'lumot bermagan bo'lsa, foydalanuvchi sozlamasi tekshiriladi
     const storedTheme = localStorage.getItem('bilimgo_theme');
@@ -178,13 +178,15 @@ export function getTelegramUser(): TelegramUser | null {
   };
 }
 
-export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'error' = 'light') {
+export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'error' | 'warning' | 'notification' = 'light') {
   if (typeof window !== 'undefined' && window.Telegram?.WebApp?.HapticFeedback) {
     try {
       if (type === 'selection') {
         window.Telegram.WebApp.HapticFeedback.selectionChanged();
-      } else if (type === 'success' || type === 'error') {
-        window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+      } else if (type === 'success' || type === 'error' || type === 'warning') {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred(type as 'error' | 'success' | 'warning');
+      } else if (type === 'notification') {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
       } else {
         window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
       }

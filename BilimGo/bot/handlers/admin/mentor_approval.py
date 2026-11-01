@@ -7,19 +7,12 @@ import logging
 import os
 
 from aiogram import Bot, F, Router
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from core.config import settings
-from db.database import database
-from db.repositories.access_grant_repo import AccessGrantRepository
-from db.repositories.cabinet_repo import CabinetRepository
-from db.repositories.chat_repo import ChatRepository
-from db.repositories.course_repo import CourseRepository
-from db.repositories.license_node_repo import LicenseNodeRepository
-from db.repositories.mentor_application_repo import MentorApplicationRepository
-from db.repositories.user_repo import User, UserRepository
+from db.repositories.user_repo import User
 from services.admin_notifier import AdminNotifier
-from services.cabinet_service import CabinetService
+from services.mentor_service import MentorService
 
 logger = logging.getLogger(__name__)
 router = Router(name="mentor_approval")
@@ -50,17 +43,11 @@ async def handle_approve_mentor_application(callback: CallbackQuery, user: User,
         return
 
     app_id = int(callback.data.split(":")[-1])
-    conn = database.conn
-    app_repo = MentorApplicationRepository(conn)
-    user_repo = UserRepository(conn)
-
-    app = await app_repo.get_by_id(app_id)
+    mentor_service = MentorService()
+    app, target_user = await mentor_service.approve_mentor_application(app_id)
     if not app:
         await callback.answer("Ariza topilmadi!", show_alert=True)
         return
-
-    # Statusni payment_pending ga o'tkazish
-    await app_repo.update_status(app_id, "payment_pending")
 
     admin_tag = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.full_name
     original_text = callback.message.html_text or callback.message.text or ""
@@ -80,7 +67,6 @@ async def handle_approve_mentor_application(callback: CallbackQuery, user: User,
         logger.warning("Guruh xabarini tahrirlashda xatolik: %s", ex)
 
     # Nomzodga bot orqali to'lov ma'lumotlarini yuborish
-    target_user = await user_repo.get_by_id(app.user_id)
     if target_user and target_user.telegram_id:
         price = app.payment_amount or int(os.getenv("MENTOR_PRICE", "949000"))
         card_number = os.getenv("MENTOR_CARD_NUMBER", "8600 0000 0000 0000")
@@ -126,16 +112,11 @@ async def handle_reject_mentor_application(callback: CallbackQuery, user: User, 
         return
 
     app_id = int(callback.data.split(":")[-1])
-    conn = database.conn
-    app_repo = MentorApplicationRepository(conn)
-    user_repo = UserRepository(conn)
-
-    app = await app_repo.get_by_id(app_id)
+    mentor_service = MentorService()
+    app, target_user = await mentor_service.reject_mentor_application(app_id)
     if not app:
         await callback.answer("Ariza topilmadi!", show_alert=True)
         return
-
-    await app_repo.update_status(app_id, "rejected")
 
     admin_tag = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.full_name
     original_text = callback.message.html_text or callback.message.text or ""
@@ -152,7 +133,6 @@ async def handle_reject_mentor_application(callback: CallbackQuery, user: User, 
     except Exception as ex:
         logger.warning("Guruh xabarini tahrirlashda xatolik: %s", ex)
 
-    target_user = await user_repo.get_by_id(app.user_id)
     if target_user and target_user.telegram_id:
         try:
             await bot.send_message(
@@ -177,63 +157,16 @@ async def handle_approve_mentor_receipt(callback: CallbackQuery, user: User, bot
         return
 
     app_id = int(callback.data.split(":")[-1])
-    conn = database.conn
-    app_repo = MentorApplicationRepository(conn)
-    user_repo = UserRepository(conn)
-    course_repo = CourseRepository(conn)
-    license_node_repo = LicenseNodeRepository(conn)
-    cabinet_repo = CabinetRepository(conn)
-    chat_repo = ChatRepository(conn)
-    access_grant_repo = AccessGrantRepository(conn)
-
-    app = await app_repo.get_by_id(app_id)
-    if not app:
+    mentor_service = MentorService()
+    res = await mentor_service.approve_mentor_receipt(app_id)
+    if not res:
         await callback.answer("Ariza topilmadi!", show_alert=True)
         return
 
-    # 1. Statusni approved ga o'tkazish
-    await app_repo.update_status(app_id, "approved")
-
-    # 2. Foydalanuvchi rolini mentor ga o'tkazish
-    await user_repo.update_role(app.user_id, "mentor")
-
-    # 3. Litsenziya tugunini yaratish / faollashtirish
-    cursor = await conn.execute(
-        "SELECT id FROM license_nodes WHERE owner_user_id = ? LIMIT 1",
-        (app.user_id,),
-    )
-    node_row = await cursor.fetchone()
-    if not node_row:
-        cur = await conn.execute(
-            "INSERT INTO license_nodes (parent_id, owner_user_id, course_id, royalty_percent, stage, status) "
-            "VALUES (1, ?, 1, 20.0, 'limit', 'active')",
-            (app.user_id,),
-        )
-        await conn.commit()
-        node_id = cur.lastrowid
-    else:
-        node_id = node_row["id"]
-        await conn.execute(
-            "UPDATE license_nodes SET status = 'active' WHERE id = ?",
-            (node_id,),
-        )
-        await conn.commit()
-
-    # 4. Kabinet yaratish
-    cabinet_service = CabinetService(cabinet_repo, chat_repo, license_node_repo, user_repo)
-    cabinet = await cabinet_service.get_or_create_for_node(node_id)
-
-    # 5. BARCHA KURSLARGA CHEKSIZ RUXSAT BERISH (BEPUL)
-    all_courses = await course_repo.list_published()
-    for course in all_courses:
-        try:
-            await access_grant_repo.grant_course_access(
-                user_id=app.user_id,
-                course_id=course.id,
-                granted_via_sale_id=0,
-            )
-        except Exception as c_ex:
-            logger.warning("Kurs %s ga ruxsat berishda xatolik: %s", course.id, c_ex)
+    app = res["app"]
+    target_user = res["target_user"]
+    cabinet = res["cabinet"]
+    all_courses = res["all_courses"]
 
     admin_tag = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.full_name
     original_text = callback.message.html_text or callback.message.text or ""
@@ -266,7 +199,6 @@ async def handle_approve_mentor_receipt(callback: CallbackQuery, user: User, bot
         logger.warning("Guruhdagi chek xabarini tahrirlashda xatolik: %s", ex)
 
     # Yangi Mentorga quvonchli xabar yuborish
-    target_user = await user_repo.get_by_id(app.user_id)
     if target_user and target_user.telegram_id:
         mentor_text = (
             f"🎉 <b>TABRIKLAYMIZ, {app.full_name}!</b> 👑\n\n"
@@ -308,16 +240,11 @@ async def handle_reject_mentor_receipt(callback: CallbackQuery, user: User, bot:
         return
 
     app_id = int(callback.data.split(":")[-1])
-    conn = database.conn
-    app_repo = MentorApplicationRepository(conn)
-    user_repo = UserRepository(conn)
-
-    app = await app_repo.get_by_id(app_id)
+    mentor_service = MentorService()
+    app, target_user = await mentor_service.reject_mentor_receipt(app_id)
     if not app:
         await callback.answer("Ariza topilmadi!", show_alert=True)
         return
-
-    await app_repo.update_status(app_id, "receipt_rejected")
 
     admin_tag = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.full_name
     original_text = callback.message.html_text or callback.message.text or ""
@@ -346,7 +273,6 @@ async def handle_reject_mentor_receipt(callback: CallbackQuery, user: User, bot:
     except Exception as ex:
         logger.warning("Guruhdagi chek xabarini tahrirlashda xatolik: %s", ex)
 
-    target_user = await user_repo.get_by_id(app.user_id)
     if target_user and target_user.telegram_id:
         try:
             await bot.send_message(
@@ -367,22 +293,13 @@ async def handle_reject_mentor_receipt(callback: CallbackQuery, user: User, bot:
 # 5. Nomzod botga to'g'ridan-to'g'ri chek (rasm) yuborganda uni ushlash
 @router.message(F.photo)
 async def handle_user_sent_receipt_photo(message: Message, user: User, bot: Bot) -> None:
-    conn = database.conn
-    app_repo = MentorApplicationRepository(conn)
-    app = await app_repo.get_latest_by_user_id(user.id)
-
-    # Agar foydalanuvchida to'lov kutilayotgan ariza bo'lsa
-    if not app or app.status not in ("payment_pending", "receipt_rejected"):
-        return
-
+    mentor_service = MentorService()
     photo_id = message.photo[-1].file_id
+    app = await mentor_service.submit_receipt_photo(user.id, photo_id)
 
-    # Bazada yangilash
-    await conn.execute(
-        "UPDATE mentor_applications SET receipt_photo_id = ?, status = 'receipt_submitted' WHERE id = ?",
-        (photo_id, app.id),
-    )
-    await conn.commit()
+    # Agar foydalanuvchida to'lov kutilayotgan ariza bo'lmasa
+    if not app:
+        return
 
     # Foydalanuvchiga tasdiq xabari
     await message.answer(
@@ -392,8 +309,6 @@ async def handle_user_sent_receipt_photo(message: Message, user: User, bot: Bot)
     )
 
     # Guruhdagi Topic 4 ga rasm va inline tugmalar bilan yuborish
-    group_id = int(os.getenv("SUPER_MENTOR_GROUP_ID", "-1004369887420"))
-    topic_id = int(os.getenv("PAYMENT_RECEIPTS_TOPIC_ID", "4"))
     receipt_caption = (
         f"🧾 <b>YANGI TO'LOV CHEKI YUBORILDI!</b>\n\n"
         f"🆔 <b>Ariza raqami:</b> #{app.id}\n"

@@ -89,9 +89,10 @@ class LicenseNodeRepository(BaseRepository):
         if autocommit:
             await self._conn.commit()
 
-    async def get_by_owner_id(self, owner_user_id: int) -> LicenseNode | None:
+    async def get_by_owner_id(self, owner_user_id: int, desc: bool = True) -> LicenseNode | None:
+        order = "DESC" if desc else "ASC"
         cursor = await self._conn.execute(
-            "SELECT * FROM license_nodes WHERE owner_user_id = ? ORDER BY id ASC LIMIT 1",
+            f"SELECT * FROM license_nodes WHERE owner_user_id = ? ORDER BY id {order} LIMIT 1",
             (owner_user_id,),
         )
         row = await cursor.fetchone()
@@ -107,3 +108,31 @@ class LicenseNodeRepository(BaseRepository):
         )
         row = await cursor.fetchone()
         return bool(row["is_expired"]) if row and row["is_expired"] is not None else False
+
+    async def create_node(
+        self,
+        owner_user_id: int,
+        course_id: int = 1,
+        parent_id: int = 1,
+        royalty_percent: float = 20.0,
+        stage: str = "limit",
+        status: str = "active",
+        autocommit: bool = True,
+    ) -> int:
+        cur = await self._conn.execute(
+            """
+            INSERT INTO license_nodes (parent_id, owner_user_id, course_id, royalty_percent, stage, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (parent_id, owner_user_id, course_id, royalty_percent, stage, status),
+        )
+        if autocommit:
+            await self._conn.commit()
+        return cur.lastrowid
+
+    async def update_course_id(self, node_id: int, course_id: int) -> None:
+        await self._conn.execute(
+            "UPDATE license_nodes SET course_id = ? WHERE id = ?",
+            (course_id, node_id),
+        )
+

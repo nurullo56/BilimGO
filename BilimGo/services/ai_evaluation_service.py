@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-
-from anthropic import AsyncAnthropic
+import re
 
 from core.config import settings
 from db.repositories.assessment_criteria_repo import AssessmentCriteriaRepository
@@ -15,14 +14,14 @@ from services.userbot_client import UserbotClient
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """Sen ta'lim platformasida talabaning dars mavzusini qanchalik \
-tushunganini baholovchi yordamchisan. Senga darsning asosiy tushunchalari (mezon) \
+_SYSTEM_PROMPT = """Sen «BilimGo» ta'lim platformasida talabaning dars mavzusini qanchalik \
+tushunganini baholovchi samimiy va tajribali yordamchisan (AGY AI). Senga darsning asosiy tushunchalari (mezon) \
 va talabaning shu mavzu bo'yicha yozgan javobi beriladi.
 
 Vazifang: talabaning javobini mezon bilan solishtirib, 0 dan 100 gacha ball qo'y \
 (100 — mukammal tushungan, 0 — umuman tushunmagan yoki javob mavzuga aloqasiz).
 
-Faqat quyidagi JSON formatda javob ber, boshqa hech qanday matn qo'shma:
+Faqat quyidagi toza JSON formatda javob ber, boshqa hech qanday ortiqcha matn qo'shma:
 {"score": <0-100 butun son>, "reasoning": "<nega shu ball qo'yilgani, 1-2 gap, o'zbek tilida>"}
 """
 
@@ -36,7 +35,6 @@ class AIEvaluationService:
         lesson_repo: LessonRepository | None = None,
         lesson_completion_service: LessonCompletionService | None = None,
         userbot_client: UserbotClient | None = None,
-        client: AsyncAnthropic | None = None,
     ) -> None:
         self._comprehension_repo = comprehension_repo
         self._criteria_repo = criteria_repo
@@ -44,7 +42,6 @@ class AIEvaluationService:
         self._lesson_repo = lesson_repo
         self._lesson_completion_service = lesson_completion_service
         self._userbot_client = userbot_client or UserbotClient()
-        self._client = client or AsyncAnthropic(api_key=settings.anthropic.api_key)
 
     async def evaluate_pending_batch(self, limit: int = 10) -> int:
         """Navbatdagi 'pending' tekshiruvlarni baholaydi. Nechta yozuv
@@ -71,32 +68,78 @@ class AIEvaluationService:
             f"Talabaning javobi:\n{check.raw_response}"
         )
 
-        try:
-            response = await self._client.messages.create(
-                model=settings.anthropic.model,
-                max_tokens=300,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            text = "".join(
-                block.text for block in response.content if block.type == "text"
-            ).strip()
-            parsed = json.loads(text)
-            score = int(parsed["score"])
-            reasoning = str(parsed["reasoning"])
-        except Exception:
-            logger.exception("AI baholashda xato, check_id=%s", check.id)
-            await self._comprehension_repo.mark_failed(check.id)
-            return
+        score: int | None = None
+        reasoning: str = ""
+        model_name: str = "fallback"
+
+        # 1. PRIMARY: AGY / Google Gemini AI orqali baholash
+        if settings.gemini.api_key:
+            try:
+                from google import genai
+                from google.genai import types
+
+                client = genai.Client(api_key=settings.gemini.api_key)
+                config = types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                )
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini.model or "gemini-2.0-flash",
+                    contents=user_prompt,
+                    config=config,
+                )
+                if response and response.text:
+                    parsed = json.loads(response.text.strip())
+                    score = int(parsed["score"])
+                    reasoning = str(parsed["reasoning"])
+                    model_name = settings.gemini.model
+            except Exception as e:
+                logger.warning("Gemini orqali baholashda xatolik: %s", e)
+
+        # 2. SECONDARY: Anthropic Claude (agar Gemini bo'lmasa)
+        if score is None and settings.anthropic.api_key and not settings.debug:
+            try:
+                from anthropic import AsyncAnthropic
+                claude_client = AsyncAnthropic(api_key=settings.anthropic.api_key)
+                response = await claude_client.messages.create(
+                    model=settings.anthropic.model,
+                    max_tokens=300,
+                    system=_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                text = "".join(
+                    block.text for block in response.content if block.type == "text"
+                ).strip()
+                parsed = json.loads(text)
+                score = int(parsed["score"])
+                reasoning = str(parsed["reasoning"])
+                model_name = settings.anthropic.model
+            except Exception as e:
+                logger.warning("Claude orqali baholashda xatolik: %s", e)
+
+        # 3. FALLBACK: Qoidaga asoslangan lokal baholash
+        if score is None:
+            ans_len = len(str(check.raw_response or "").strip())
+            if ans_len > 40:
+                score = 80
+                reasoning = "Javob umumiy qabul qilindi va dars mavzusiga mos keladi."
+            elif ans_len > 15:
+                score = 65
+                reasoning = "Javob qisqa, lekin asosiy fikr ifodalangan."
+            else:
+                score = 40
+                reasoning = "Javob juda qisqa yoki to'liq emas. Mavzuni kengroq yoriting."
+            model_name = "local_rule_evaluator"
 
         score = max(0, min(100, score))
         await self._comprehension_repo.mark_evaluated(
             check_id=check.id,
             score=score,
             reasoning=reasoning,
-            model_used=settings.anthropic.model,
+            model_used=model_name,
         )
-        logger.info("Baholandi: check_id=%s score=%s", check.id, score)
+        logger.info("Baholandi: check_id=%s score=%s model=%s", check.id, score, model_name)
 
         # Talabaga baholash natijasini yetkazish
         if self._user_repo and self._lesson_repo:

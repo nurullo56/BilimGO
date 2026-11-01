@@ -94,12 +94,136 @@ class CabinetRepository(BaseRepository):
     async def list_my_cabinets(self, user_id: int) -> list[dict]:
         cursor = await self._conn.execute(
             """
-            SELECT c.id, c.display_name, COALESCE(cm.role_in_cabinet, 'member') as role_in_cabinet
+            SELECT c.id, c.display_name, cm.role_in_cabinet
             FROM cabinets c
-            LEFT JOIN cabinet_members cm ON cm.cabinet_id = c.id AND cm.user_id = ?
+            JOIN cabinet_members cm ON cm.cabinet_id = c.id
+            WHERE cm.user_id = ?
             ORDER BY c.id DESC
             """,
             (user_id,),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+    async def get_owned_cabinet_ids(self, owner_user_id: int) -> list[int]:
+        """Berilgan foydalanuvchiga tegishli barcha kabinet ID larini bitta so'rov bilan oladi."""
+        cursor = await self._conn.execute(
+            """
+            SELECT c.id 
+            FROM cabinets c
+            JOIN license_nodes ln ON ln.id = c.owner_node_id
+            WHERE ln.owner_user_id = ?
+            ORDER BY c.id ASC
+            """,
+            (owner_user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [r["id"] for r in rows]
+
+    async def get_user_cabinets_with_details(self, user_id: int, is_admin: bool) -> list[dict]:
+        """Foydalanuvchining a'zolikdagi (yoki admin bo'lsa barcha) kabinetlarini talabalar soni bilan oladi."""
+        if is_admin:
+            cursor = await self._conn.execute(
+                """
+                SELECT c.id, c.display_name, c.branding_config, c.created_at,
+                       COALESCE(cm.role_in_cabinet, 'mentor') as role_in_cabinet,
+                       (SELECT COUNT(*) FROM cabinet_members WHERE cabinet_id = c.id AND role_in_cabinet = 'student') as students_count
+                FROM cabinets c
+                LEFT JOIN cabinet_members cm ON cm.cabinet_id = c.id AND cm.user_id = ?
+                ORDER BY c.id DESC
+                """,
+                (user_id,),
+            )
+        else:
+            cursor = await self._conn.execute(
+                """
+                SELECT c.id, c.display_name, c.branding_config, c.created_at, cm.role_in_cabinet,
+                       (SELECT COUNT(*) FROM cabinet_members WHERE cabinet_id = c.id AND role_in_cabinet = 'student') as students_count
+                FROM cabinet_members cm
+                JOIN cabinets c ON c.id = cm.cabinet_id
+                WHERE cm.user_id = ?
+                ORDER BY c.id DESC
+                """,
+                (user_id,),
+            )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def create_cabinet_record(
+        self, owner_node_id: int, display_name: str, branding_config: str | None = None
+    ) -> dict:
+        """Yangi kabinet yaratadi va yaratilgan yozuvni qaytaradi."""
+        cursor = await self._conn.execute(
+            """
+            INSERT INTO cabinets (owner_node_id, display_name, branding_config)
+            VALUES (?, ?, ?)
+            RETURNING id, display_name, created_at
+            """,
+            (owner_node_id, display_name, branding_config),
+        )
+        row = await cursor.fetchone()
+        await self._conn.commit()
+        assert row is not None
+        return dict(row)
+
+    async def get_branding_config(self, cabinet_id: int) -> str | None:
+        """Kabinetning mavjud branding_config satrini oladi."""
+        cursor = await self._conn.execute(
+            "SELECT branding_config FROM cabinets WHERE id = ?", (cabinet_id,)
+        )
+        row = await cursor.fetchone()
+        return row["branding_config"] if row else None
+
+    async def update_cabinet_branding(
+        self, cabinet_id: int, display_name: str, branding_config: str
+    ) -> None:
+        """Kabinet nomi va brending konfiguratsiyasini yangilaydi."""
+        await self._conn.execute(
+            "UPDATE cabinets SET display_name = ?, branding_config = ? WHERE id = ?",
+            (display_name, branding_config, cabinet_id),
+        )
+        await self._conn.commit()
+
+    async def delete_cascade(self, cabinet_id: int) -> None:
+        """Kabinet va unga tegishli barcha xabar, a'zo va xonalarni kaskadli o'chiradi."""
+        await self._conn.execute(
+            "DELETE FROM chat_messages WHERE room_id IN (SELECT id FROM chat_rooms WHERE cabinet_id = ?)",
+            (cabinet_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM chat_room_members WHERE room_id IN (SELECT id FROM chat_rooms WHERE cabinet_id = ?)",
+            (cabinet_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM chat_rooms WHERE cabinet_id = ?",
+            (cabinet_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM cabinet_members WHERE cabinet_id = ?",
+            (cabinet_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM cabinets WHERE id = ?",
+            (cabinet_id,),
+        )
+        await self._conn.commit()
+
+    async def get_student_mentor_owner_id(self, student_id: int) -> int | None:
+        """Talabaning oxirgi a'zo bo'lgan kabineti orqali uning mentorining owner_user_id sini oladi."""
+        cursor = await self._conn.execute(
+            """
+            SELECT ln.owner_user_id
+            FROM cabinet_members cm
+            JOIN cabinets c ON c.id = cm.cabinet_id
+            JOIN license_nodes ln ON ln.id = c.owner_node_id
+            WHERE cm.user_id = ? AND cm.role_in_cabinet = 'student'
+            ORDER BY cm.id DESC
+            LIMIT 1
+            """,
+            (student_id,),
+        )
+        row = await cursor.fetchone()
+        return row["owner_user_id"] if row and row["owner_user_id"] else None
+
+
+

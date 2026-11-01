@@ -6,10 +6,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from bot.keyboards.student import get_course_detail_keyboard, get_course_list_keyboard
 from core.config import settings
-from db.database import database
 from db.repositories.course_repo import Course
-from db.repositories.user_repo import UserRepository
-from db.repositories.waitlist_repo import WaitlistRepository
 from services.course_service import CourseService
 
 logger = logging.getLogger(__name__)
@@ -55,13 +52,9 @@ async def show_course_detail(callback: CallbackQuery) -> None:
 
     # Agar kurs kutish ro'yxatida (Waitlist) bo'lsa
     if course.is_waitlist:
-        conn = database.conn
-        user_repo = UserRepository(conn)
-        user = await user_repo.get_or_create(telegram_id=callback.from_user.id)
-        waitlist_repo = WaitlistRepository(conn)
-
-        is_in = await waitlist_repo.is_in_waitlist(course.id, user.id)
-        count = await waitlist_repo.get_count(course.id)
+        wl_info = await course_service.get_waitlist_status(course.id, callback.from_user.id)
+        is_in = wl_info["is_in_waitlist"]
+        count = wl_info["waitlist_count"]
 
         webapp_url = f"{settings.webapp.base_url}/course/{course.id}?view=course&course_id={course.id}"
 
@@ -138,17 +131,10 @@ async def show_course_detail(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("waitlist:join:"))
 async def handle_waitlist_join(callback: CallbackQuery) -> None:
     course_id = int(callback.data.split(":")[2])
-    conn = database.conn
-    user_repo = UserRepository(conn)
-    user = await user_repo.get_or_create(telegram_id=callback.from_user.id)
-    waitlist_repo = WaitlistRepository(conn)
-    course_repo = CourseService(course_repo=None)
-
-    course = await course_repo.get_by_id(course_id)
-    course_title = course.title if course else "AI Kursi"
-
-    await waitlist_repo.join_waitlist(course_id, user.id, user.phone)
-    count = await waitlist_repo.get_count(course_id)
+    course_service = CourseService()
+    res = await course_service.join_waitlist(course_id, callback.from_user.id)
+    count = res["waitlist_count"]
+    course_title = res["course_title"]
 
     webapp_url = f"{settings.webapp.base_url}/course/{course_id}?view=course&course_id={course_id}"
     updated_keyboard = InlineKeyboardMarkup(
@@ -187,17 +173,9 @@ async def handle_waitlist_join(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("waitlist:leave:"))
 async def handle_waitlist_leave(callback: CallbackQuery) -> None:
     course_id = int(callback.data.split(":")[2])
-    conn = database.conn
-    user_repo = UserRepository(conn)
-    user = await user_repo.get_or_create(telegram_id=callback.from_user.id)
-    waitlist_repo = WaitlistRepository(conn)
-    course_repo = CourseService(course_repo=None)
-
-    course = await course_repo.get_by_id(course_id)
-    course_title = course.title if course else "AI Kursi"
-
-    await waitlist_repo.leave_waitlist(course_id, user.id)
-    count = await waitlist_repo.get_count(course_id)
+    course_service = CourseService()
+    res = await course_service.leave_waitlist(course_id, callback.from_user.id)
+    course_title = res["course_title"]
 
     webapp_url = f"{settings.webapp.base_url}/course/{course_id}?view=course&course_id={course_id}"
     rejoin_keyboard = InlineKeyboardMarkup(

@@ -44,6 +44,41 @@ class PaymentService:
         self._userbot_client = userbot_client or UserbotClient()
         self._auto_debit_service = auto_debit_service
 
+    @classmethod
+    def create_default(cls, conn=None) -> "PaymentService":
+        """Yagona markazlashgan PaymentService fabrikasi."""
+        from db.database import database
+        from db.repositories.cabinet_repo import CabinetRepository
+        from db.repositories.chat_repo import ChatRepository
+        from db.repositories.license_node_repo import LicenseNodeRepository
+        from db.repositories.mentor_card_repo import MentorCardRepository
+        from db.repositories.royalty_repo import RoyaltyLedgerRepository
+
+        c = conn or database.conn
+        node_repo = LicenseNodeRepository(c)
+        royalty_repo = RoyaltyLedgerRepository(c)
+        user_repo = UserRepository(c)
+        card_repo = MentorCardRepository(c)
+
+        royalty_service = RoyaltyService(node_repo, royalty_repo)
+        cabinet_service = CabinetService(
+            cabinet_repo=CabinetRepository(c),
+            chat_repo=ChatRepository(c),
+            license_node_repo=node_repo,
+            user_repo=user_repo,
+        )
+        auto_debit_service = AutoDebitService(node_repo, royalty_repo, card_repo, user_repo)
+
+        return cls(
+            course_repo=CourseRepository(c),
+            sale_repo=SaleRepository(c),
+            access_grant_repo=AccessGrantRepository(c),
+            royalty_service=royalty_service,
+            cabinet_service=cabinet_service,
+            user_repo=user_repo,
+            auto_debit_service=auto_debit_service,
+        )
+
     async def initiate_purchase(
         self,
         student_id: int,

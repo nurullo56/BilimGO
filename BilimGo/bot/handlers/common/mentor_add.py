@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.handlers.common._utils import AddMentorState, _notify_super_mentors_about_mentor_activation
+from bot.handlers.common._utils import AddMentorState
 from bot.keyboards.admin import ADMIN_MENU
 from bot.keyboards.common import (
     get_mentor_assignment_courses_keyboard,
@@ -18,15 +18,9 @@ from bot.keyboards.common import (
 )
 from bot.keyboards.mentor import get_mentor_inline_webapp
 from core.config import settings
-from db.database import database
-from db.repositories.access_grant_repo import AccessGrantRepository
-from db.repositories.cabinet_repo import CabinetRepository
-from db.repositories.chat_repo import ChatRepository
-from db.repositories.course_repo import CourseRepository
-from db.repositories.license_node_repo import LicenseNodeRepository
-from db.repositories.tariff_quota_repo import TariffQuotaRepository
-from db.repositories.user_repo import User, UserRepository
-from services.cabinet_service import CabinetService
+from db.repositories.user_repo import User
+from services.course_service import CourseService
+from services.mentor_service import MentorService
 
 logger = logging.getLogger(__name__)
 router = Router(name="mentor_add")
@@ -46,7 +40,7 @@ async def start_add_mentor_process(message: Message, user: User, state: FSMConte
     args = message.text.split()
     if len(args) >= 2 and args[1].isdigit():
         target_tid = int(args[1])
-        courses = await CourseRepository(database.conn).list_published()
+        courses = await CourseService().list_published()
         keyboard = get_mentor_assignment_courses_keyboard(courses, target_tid)
         await message.answer(
             f"👤 <b>Yangi Mentor Telegram ID:</b> <code>{target_tid}</code>\n\n"
@@ -79,13 +73,8 @@ async def process_mentor_id_input(message: Message, state: FSMContext, bot: Bot)
         return
 
     target_tid = int(text)
-    conn = database.conn
-    user_repo = UserRepository(conn)
-    course_repo = CourseRepository(conn)
-
-    target_user = await user_repo.get_or_create(telegram_id=target_tid)
-    display_name = target_user.full_name or f"Foydalanuvchi #{target_tid}"
-    courses = await course_repo.list_published()
+    mentor_service = MentorService()
+    target_user, display_name, courses = await mentor_service.get_target_user_and_courses(target_tid)
 
     if not courses:
         await message.answer("Tizimda nashr qilingan kurslar mavjud emas.")
@@ -113,8 +102,7 @@ async def handle_mentor_assign_course(callback: CallbackQuery) -> None:
     target_tid = int(parts[1])
     course_id = int(parts[2])
 
-    course_repo = CourseRepository(database.conn)
-    course = await course_repo.get_by_id(course_id)
+    course = await CourseService().get_by_id(course_id)
     course_title = course.title if course else f"Kurs #{course_id}"
 
     keyboard = get_mentor_tariff_keyboard(target_tid, course_id)
@@ -161,51 +149,23 @@ async def process_mentor_assignment(
     if bot is None:
         bot = message.bot
 
-    conn = database.conn
-    user_repo = UserRepository(conn)
-    course_repo = CourseRepository(conn)
-    license_node_repo = LicenseNodeRepository(conn)
-    cabinet_repo = CabinetRepository(conn)
-    chat_repo = ChatRepository(conn)
-    access_grant_repo = AccessGrantRepository(conn)
-    quota_repo = TariffQuotaRepository(conn)
-
-    target_user = await user_repo.get_or_create(telegram_id=target_tid)
-    await user_repo.update_role(target_user.id, "mentor")
-
-    cursor = await conn.execute(
-        "SELECT id FROM license_nodes WHERE owner_user_id = ? LIMIT 1", (target_user.id,)
-    )
-    node_row = await cursor.fetchone()
-    if not node_row:
-        cur = await conn.execute(
-            "INSERT INTO license_nodes (parent_id, owner_user_id, course_id, royalty_percent, stage, status) "
-            "VALUES (1, ?, ?, 20.0, 'limit', 'active')",
-            (target_user.id, course_id),
+    mentor_service = MentorService()
+    try:
+        res = await mentor_service.assign_mentor(
+            target_tid=target_tid,
+            course_id=course_id,
+            tariff_name=tariff_name,
         )
-        await conn.commit()
-        node_id = cur.lastrowid
-    else:
-        node_id = node_row["id"]
-        await conn.execute("UPDATE license_nodes SET course_id = ? WHERE id = ?", (course_id, node_id))
-        await conn.commit()
+    except Exception as e:
+        logger.exception("Mentor tayinlashda xatolik yuz berdi: %s", e)
+        await message.answer("❌ Mentorni tayinlashda xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.")
+        return
 
-    # 15 kunlik bepul limit kvotalarini shakllantirish
-    await quota_repo.initialize_quotas_for_tariff(node_id, tariff_name)
-
-    cabinet_service = CabinetService(cabinet_repo, chat_repo, license_node_repo, user_repo)
-    cabinet = await cabinet_service.get_or_create_for_node(node_id)
-    all_courses = await course_repo.list_published()
-
-    # Barcha kurslarga mentor uchun dostup ochish
-    for c in all_courses:
-        try:
-            await access_grant_repo.grant_access(target_user.id, c.id, node_id)
-        except Exception:
-            pass
-
-    selected_course = await course_repo.get_by_id(course_id)
-    course_title = selected_course.title if selected_course else f"Kurs #{course_id}"
+    target_user = res["target_user"]
+    node_id = res["node_id"]
+    cabinet = res["cabinet"]
+    all_courses = res["all_courses"]
+    course_title = res["course_title"]
 
     bot_info = await bot.get_me()
     bot_username = bot_info.username or "BilimGoUz_Bot"
@@ -255,21 +215,8 @@ async def handle_list_all_mentors(message: Message, user: User) -> None:
         await message.answer("Bu buyruq faqat Super Admin uchun.")
         return
 
-    conn = database.conn
-    cursor = await conn.execute(
-        """
-        SELECT
-            u.id as user_id, u.full_name, u.telegram_id, u.phone,
-            ln.id as node_id, ln.stage,
-            (SELECT COUNT(*) FROM cabinet_members cm WHERE cm.cabinet_id = cab.id AND cm.role_in_cabinet = 'student') as student_count
-        FROM license_nodes ln
-        JOIN users u ON u.id = ln.owner_user_id
-        LEFT JOIN cabinets cab ON cab.owner_node_id = ln.id
-        WHERE ln.id > 1
-        ORDER BY ln.id ASC
-        """
-    )
-    rows = await cursor.fetchall()
+    mentor_service = MentorService()
+    rows = await mentor_service.list_all_submentors_overview()
 
     if not rows:
         await message.answer(

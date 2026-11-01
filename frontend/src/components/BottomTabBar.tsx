@@ -22,8 +22,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
     if (
       currentView.type === 'catalog' ||
       currentView.type === 'course' ||
-      currentView.type === 'lesson' ||
-      currentView.type === 'live'
+            currentView.type === 'live'
     ) {
       return 'catalog';
     }

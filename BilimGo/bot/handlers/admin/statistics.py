@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.handlers.admin._admin_db import get_courses_and_counts
+from db.repositories.admin_repo import AdminRepository
 from bot.keyboards.admin import ADMIN_MENU, get_admin_panel_keyboard
 from core.config import settings
 
@@ -28,7 +28,7 @@ async def handle_admin_command(message: Message, state: FSMContext) -> None:
         return
 
     await state.clear()
-    courses, counts = await get_courses_and_counts()
+    courses, counts = await AdminRepository().get_courses_and_counts()
 
     txt = (
         "👑 <b>Admin Boshqaruv Markazi</b>\n\n"
@@ -51,7 +51,7 @@ async def process_admin_stats(event: Message | CallbackQuery) -> None:
             await event.answer("Ruxsatingiz yo'q!", show_alert=True)
         return
 
-    courses, counts = await get_courses_and_counts()
+    courses, counts = await AdminRepository().get_courses_and_counts()
 
     txt = (
         "📊 <b>Platforma Statistikasi:</b>\n\n"

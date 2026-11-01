@@ -5,6 +5,7 @@ from typing import Literal
 
 import aiosqlite
 
+from core.exceptions import NotFoundError
 from db.repositories.base import BaseRepository
 
 UserRole = Literal["student", "mentor", "admin"]
@@ -102,3 +103,42 @@ class UserRepository(BaseRepository):
             "UPDATE users SET status = ? WHERE id = ?", (status, user_id)
         )
         await self._conn.commit()
+
+    async def list_mentors_with_nodes(self) -> list[dict]:
+        """Litsenziya tuguniga ega bo'lgan barcha mentorlarni oladi."""
+        cursor = await self._conn.execute(
+            """
+            SELECT 
+                u.id,
+                u.telegram_id,
+                u.full_name,
+                ln.stage,
+                ln.royalty_percent
+            FROM users u
+            JOIN license_nodes ln ON u.id = ln.owner_user_id
+            GROUP BY u.id
+            """
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_user_assigned_mentor_and_cabinet(self, user_id: int) -> dict | None:
+        """Foydalanuvchi a'zo bo'lgan guruh va uning mentor ma'lumotlarini oladi."""
+        cursor = await self._conn.execute(
+            """
+            SELECT 
+                cab.display_name as cabinet_name,
+                mentor_user.full_name as mentor_name,
+                mentor_user.telegram_id as mentor_tg_id
+            FROM cabinet_members cm
+            JOIN cabinets cab ON cab.id = cm.cabinet_id
+            JOIN license_nodes ln ON ln.id = cab.owner_node_id
+            JOIN users mentor_user ON mentor_user.id = ln.owner_user_id
+            WHERE cm.user_id = ?
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+

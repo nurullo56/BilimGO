@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from core.config import settings
 from core.exceptions import NotFoundError
 from db.database import database
 from db.repositories.access_grant_repo import AccessGrantRepository
@@ -118,6 +120,34 @@ async def click_complete(request: Request) -> JSONResponse:
 @router.post("/payme")
 async def payme_rpc(request: Request) -> JSONResponse:
     body = await request.json()
+
+    # Payme Webhook Basic Auth tekshiruvi:
+    # Header formati: Authorization: Basic base64(Paycom:PAYME_SECRET_KEY)
+    if settings.payme.secret_key:
+        auth_header = request.headers.get("Authorization", "")
+        is_authenticated = False
+        if auth_header.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+                if ":" in decoded:
+                    _, key = decoded.split(":", 1)
+                    if key == settings.payme.secret_key:
+                        is_authenticated = True
+            except Exception:
+                is_authenticated = False
+
+        if not is_authenticated:
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": -32504,
+                        "message": "Kirish huquqi yetarli emas (Autentifikatsiya xatosi)",
+                    },
+                    "id": body.get("id"),
+                },
+                status_code=200,
+            )
+
     service = PaymeService(
         sale_repo=SaleRepository(database.conn),
         payme_txn_repo=PaymeTransactionRepository(database.conn),

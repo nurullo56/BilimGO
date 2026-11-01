@@ -334,37 +334,12 @@ def _find_lesson_images(lesson: Lesson) -> list[str]:
     return img_urls
 
 
-def _find_lesson_text_material(lesson: Lesson) -> str | None:
-    """Telegram kanalidagi ushbu darsga tegishli matnli dars/shablonni oladi."""
+async def _find_lesson_text_material(lesson: Lesson) -> str | None:
+    """Telegram kanalidagi ushbu darsga tegishli matnli dars/shablonni LessonRepository orqali oladi."""
     if not lesson or not lesson.source_channel_id or not lesson.source_message_id:
         return None
-    try:
-        import sqlite3
-        candidate_userbot_dbs = [
-            settings.paths.userbot_db_path,
-            Path("C:/Users/Acer/Downloads/BilimGoUserBot/BilimGoUserBot/userbot_database.db"),
-            Path(__file__).resolve().parents[4] / "BilimGoUserBot" / "BilimGoUserBot" / "userbot_database.db",
-            Path(__file__).resolve().parents[3] / "BilimGoUserBot" / "BilimGoUserBot" / "userbot_database.db",
-        ]
-        userbot_db_path = None
-        for db_p in candidate_userbot_dbs:
-            if db_p and db_p.exists():
-                userbot_db_path = db_p
-                break
-        if not userbot_db_path:
-            return None
-        with sqlite3.connect(userbot_db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            # Faqat aynan shu dars xabaridagi matn
-            row = conn.execute(
-                "SELECT text FROM posts WHERE channel_id = ? AND message_id = ?",
-                (lesson.source_channel_id, lesson.source_message_id),
-            ).fetchone()
-            if row and row["text"] and len(row["text"].strip()) > 20:
-                return row["text"].strip()
-    except Exception as e:
-        logger.warning(f"Error fetching lesson text material: {e}")
-    return None
+    lesson_repo = LessonRepository(database.conn)
+    return await lesson_repo.get_source_post_text(lesson.source_channel_id, lesson.source_message_id)
 
 
 def _get_media_type(path: Path) -> str:
@@ -423,7 +398,7 @@ async def create_access_token(
     lesson_repo = LessonRepository(database.conn)
     lesson = await lesson_repo.get_by_id(lesson_id)
     local_file = _find_local_media(lesson) if lesson else None
-    text_content = _find_lesson_text_material(lesson) if lesson else None
+    text_content = (await _find_lesson_text_material(lesson)) if lesson else None
 
     media_type = "video/mp4"
     is_audio = False

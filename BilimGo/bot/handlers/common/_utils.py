@@ -32,16 +32,23 @@ class AddMentorState(StatesGroup):
     waiting_for_tg_id = State()
 
 
-def _parse_payload(payload: str | None) -> tuple[int | None, int | None, bool, int | None]:
-    """Payload'dan course_id, node_id, is_mentor_invite va mentor_target_id ni aniqlaydi."""
+def _parse_payload(payload: str | None) -> tuple[int | None, int | None, bool, int | None, bool]:
+    """
+    Payload'dan course_id, node_id, is_mentor_invite, mentor_target_id va is_direct_paid ni aniqlaydi.
+    is_direct_paid: Talaba lichkada (kartaga/qo'ldan) to'lagan bo'lsa, kurs to'g'ridan-to'g'ri ochiladi.
+    """
     if not payload:
-        return None, None, False, None
+        return None, None, False, None, False
 
     p_lower = payload.lower().strip()
     course_id: int | None = None
     node_id: int | None = None
     is_mentor_invite: bool = "mentor" in p_lower or "kurator" in p_lower
     mentor_target_id: int | None = None
+
+    # Lichkada to'langan (ochiq / direct) havola belgilari:
+    # open_node_5_course_1, paid_node_5_course_1, direct_node_5_course_1
+    is_direct_paid: bool = any(k in p_lower for k in ["open_", "paid_", "direct_", "lichka_", "access_"])
 
     if is_mentor_invite:
         parts = p_lower.split("mentor_")
@@ -86,7 +93,7 @@ def _parse_payload(payload: str | None) -> tuple[int | None, int | None, bool, i
     elif p_lower.isdigit() and int(p_lower) > 10:
         node_id = int(p_lower)
 
-    return course_id, node_id, is_mentor_invite, mentor_target_id
+    return course_id, node_id, is_mentor_invite, mentor_target_id, is_direct_paid
 
 
 async def _handle_student_mentor_binding(
@@ -94,12 +101,15 @@ async def _handle_student_mentor_binding(
     student: User,
     payload: str | None,
     from_tg_user: any = None,
-) -> tuple[str, any]:
-    """Talabani mentor kabinetiga biriktirish, kurs dostupini berish va mentorga bildirishnoma yuborish."""
+) -> tuple[str, any, bool]:
+    """
+    Talabani mentor kabinetiga biriktirish, tegishli kurs dostupini berish va mentorga bildirishnoma yuborish.
+    Qaytaradi: (mentor_info: str, target_course: Course | None, is_direct_paid: bool)
+    """
     if not payload:
-        return "", None
+        return "", None, False
 
-    course_id, node_id, is_mentor_invite, mentor_target_id = _parse_payload(payload)
+    course_id, node_id, is_mentor_invite, mentor_target_id, is_direct_paid = _parse_payload(payload)
     conn = database.conn
     course_repo = CourseRepository(conn)
     access_grant_repo = AccessGrantRepository(conn)
@@ -117,13 +127,7 @@ async def _handle_student_mentor_binding(
     elif mentor_target_id:
         mentor_user_temp = await user_repo.get_by_telegram_id(mentor_target_id)
         if mentor_user_temp:
-            cursor = await conn.execute(
-                "SELECT id FROM license_nodes WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1",
-                (mentor_user_temp.id,),
-            )
-            node_row = await cursor.fetchone()
-            if node_row:
-                node = await license_node_repo.get_by_id(node_row["id"])
+            node = await license_node_repo.get_by_owner_id(mentor_user_temp.id)
 
     if node:
         if node.id > 1 and node.status in ("suspended", "terminated"):
@@ -162,15 +166,27 @@ async def _handle_student_mentor_binding(
                     phone_str = student.phone or "Kiritilmagan"
                     student_display = student.full_name or (from_tg_user.full_name if from_tg_user else "Yangi talaba")
 
-                    notify_text = (
-                        f"🔔 <b>Yangi o'quvchi ro'yxatdan o'tdi va o'qishni boshladi!</b> 🎓\n\n"
-                        f"👤 <b>O'quvchi:</b> <b>{student_display}</b>\n"
-                        f"📱 <b>Telefon:</b> <code>{phone_str}</code>\n"
-                        f"💬 <b>Telegram:</b> {username_str} (ID: <code>{student.telegram_id}</code>)\n"
-                        f"📚 <b>Kurs:</b> «{course_title}»\n"
-                        f"🏢 <b>Kabinet:</b> {cabinet.display_name}\n\n"
-                        f"👏 <i>O'quvchi sizning taklif havolangiz orqali platformaga kirdi.</i>"
-                    )
+                    # Lichkada to'langanmi yoki oddiy qiziquvchi o'quvchimi?
+                    if is_direct_paid:
+                        notify_text = (
+                            f"🔔 <b>O'quvchi lichkada to'langan (ochiq) havola orqali kursni boshladi!</b> 🎓\n\n"
+                            f"👤 <b>O'quvchi:</b> <b>{student_display}</b>\n"
+                            f"📱 <b>Telefon:</b> <code>{phone_str}</code>\n"
+                            f"💬 <b>Telegram:</b> {username_str} (ID: <code>{student.telegram_id}</code>)\n"
+                            f"📚 <b>Kurs:</b> «{course_title}» (To'liq ochildi ✅)\n"
+                            f"🏢 <b>Kabinet:</b> {cabinet.display_name}\n\n"
+                            f"💰 <i>O'quvchi siz taqdim etgan to'g'ridan-to'g'ri havola orqali kirdi.</i>"
+                        )
+                    else:
+                        notify_text = (
+                            f"🔔 <b>Yangi o'quvchi sotuv havolangiz orqali kabinetingizga kirdi!</b> 👥\n\n"
+                            f"👤 <b>O'quvchi:</b> <b>{student_display}</b>\n"
+                            f"📱 <b>Telefon:</b> <code>{phone_str}</code>\n"
+                            f"💬 <b>Telegram:</b> {username_str} (ID: <code>{student.telegram_id}</code>)\n"
+                            f"📚 <b>Tavsiya etilgan kurs:</b> «{course_title}»\n"
+                            f"🏢 <b>Kabinet:</b> {cabinet.display_name}\n\n"
+                            f"⏳ <i>O'quvchi Mini App orqali to'lovni amalga oshirgach, sotuv va royalti hisobingizga yoziladi.</i>"
+                        )
                     await bot.send_message(
                         chat_id=mentor_user.telegram_id, text=notify_text, parse_mode="HTML"
                     )
@@ -178,12 +194,18 @@ async def _handle_student_mentor_binding(
                 except Exception as e:
                     logger.warning("Mentorga xabar yuborishda xatolik (%s): %s", mentor_user.telegram_id, e)
 
+    # 🎯 KIRISH HUQUQI (ACCESS):
+    # 1) Agar Konkurs / Aksiya kursi bo'lsa (ID: 3) -> Har doim to'liq ochiladi
+    # 2) Agar Mentor bergan ochiq havola (lichkada to'langan) bo'lsa -> To'liq ochiladi
+    # 3) Oddiy sotuv havolasi bo'lsa -> Kurs ochilmaydi, talaba Mini Appda xarid qilishi kerak
     if target_course:
-        await access_grant_repo.grant_course_access(
-            user_id=student.id, course_id=target_course.id, granted_via_sale_id=0,
-        )
+        is_konkurs = bool(target_course.id == 3 or "konkurs" in target_course.title.lower() or "aksiya" in target_course.title.lower())
+        if is_direct_paid or is_konkurs:
+            await access_grant_repo.grant_course_access(
+                user_id=student.id, course_id=target_course.id, granted_via_sale_id=0,
+            )
 
-    return mentor_info, target_course
+    return mentor_info, target_course, is_direct_paid
 
 
 async def _notify_super_mentors_about_mentor_activation(

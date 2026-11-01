@@ -21,6 +21,7 @@ from services.cabinet_service import CabinetService
 
 @pytest_asyncio.fixture
 async def test_db(tmp_path: Path):
+    from db.database import database
     db_file = tmp_path / "test.db"
     db = Database(db_file)
     await db.connect()
@@ -29,8 +30,13 @@ async def test_db(tmp_path: Path):
     migrations_dir = Path(__file__).resolve().parent.parent / "db" / "migrations"
     await db.run_migrations(migrations_dir)
     
-    yield db
-    await db.close()
+    old_conn = database._conn
+    database._conn = db.conn
+    try:
+        yield db
+    finally:
+        database._conn = old_conn
+        await db.close()
 
 
 @pytest.mark.asyncio
@@ -204,4 +210,73 @@ async def test_live_session_lifecycle(test_db: Database):
     await repo.set_status(session_id, "ended")
     ended = await repo.get_by_id(session_id)
     assert ended.status == "ended"
+
+
+@pytest.mark.asyncio
+async def test_broadcast_audience_resolution(test_db: Database):
+    conn = test_db.conn
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (1, 1001, 'Admin', 'admin', 'active')")
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (2, 1002, 'Mentor', 'mentor', 'active')")
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (3, 1003, 'Student', 'student', 'active')")
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (4, 1004, 'Inactive', 'student', 'blocked')")
+    await conn.execute("INSERT INTO courses (id, title, base_price, status) VALUES (1, 'Logistika', 500000, 'published')")
+    await conn.execute("INSERT INTO access_grants (user_id, course_id, status) VALUES (3, 1, 'active')")
+    await conn.commit()
+
+    from db.repositories.broadcast_repo import BroadcastRepository
+    from services.broadcast_service import BroadcastService
+
+    repo = BroadcastRepository()
+    repo.db = test_db
+    service = BroadcastService(broadcast_repo=repo)
+
+    all_users = await service.resolve_audience("all")
+    assert 1001 in all_users
+    assert 1002 in all_users
+    assert 1003 in all_users
+    assert 1004 not in all_users
+
+    mentors = await service.resolve_audience("mentors")
+    assert mentors == [1002]
+
+    direct = await service.resolve_audience("mentor_direct_2")
+    assert direct == [1002]
+
+    course_students = await service.resolve_audience("course_students_1")
+    assert course_students == [1003]
+
+
+@pytest.mark.asyncio
+async def test_live_session_service_upcoming_and_audience(test_db: Database):
+    conn = test_db.conn
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (1, 1001, 'Super Admin', 'admin', 'active')")
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (10, 1010, 'Mentor', 'mentor', 'active')")
+    await conn.execute("INSERT INTO users (id, telegram_id, full_name, role, status) VALUES (20, 1020, 'Student 1', 'student', 'active')")
+    await conn.execute("INSERT INTO courses (id, title, base_price, status) VALUES (1, 'Logistika Kursi', 500000, 'published')")
+    await conn.execute("INSERT INTO access_grants (user_id, course_id, status) VALUES (20, 1, 'active')")
+    await conn.commit()
+
+    from db.repositories.live_session_repo import LiveSessionRepository
+    from db.repositories.access_grant_repo import AccessGrantRepository
+    from services.live_session_service import LiveSessionService
+
+    live_repo = LiveSessionRepository(conn)
+    access_grant_repo = AccessGrantRepository(conn)
+    service = LiveSessionService(live_repo=live_repo, access_grant_repo=access_grant_repo)
+
+    s_id = await live_repo.create(
+        course_id=1,
+        mentor_id=10,
+        scheduled_at="2026-11-01 12:00:00",
+        title="Jonli efir",
+    )
+
+    upcoming = await service.list_upcoming(1)
+    assert len(upcoming) >= 1
+    assert upcoming[0]["title"] == "Jonli efir"
+
+    audience = await service.get_session_audience_students(s_id, mentor_id=1)
+    assert len(audience) == 1
+    assert audience[0]["telegram_id"] == 1020
+
 
