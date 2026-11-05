@@ -20,11 +20,15 @@ export interface Course {
   category?: string;
   instructor?: string;
   thumbnail?: string;
+  image_url?: string;
+  notice_text?: string;
+  syllabus?: any;
   total_lessons?: number;
   total_duration_minutes?: number;
   is_enrolled?: boolean;
   has_access?: boolean;
   is_waitlist?: boolean;
+  is_in_waitlist?: boolean;
   tariffs?: CourseTariff[];
 }
 

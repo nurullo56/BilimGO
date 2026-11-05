@@ -28,36 +28,7 @@ router = Router(name="admin_broadcast")
 
 
 # ==========================================
-# 1. /admin BUYRUG'I
-# ==========================================
-
-@router.message(Command("admin"))
-async def handle_admin_command(message: Message, state: FSMContext) -> None:
-    user_id = message.from_user.id if message.from_user else 0
-    if user_id not in settings.bot.admin_ids:
-        await message.answer("⚠️ Sizda ushbu buyruqdan foydalanish huquqi yo'q.")
-        return
-
-    await state.clear()
-    courses, counts = await AdminRepository().get_courses_and_counts()
-
-    txt = (
-        "👑 <b>Admin Boshqaruv Markazi</b>\n\n"
-        f"👤 <b>Admin:</b> {message.from_user.full_name}\n"
-        f"🌐 <b>Jami foydalanuvchilar:</b> {counts.get('all', 0)} ta\n"
-        f"🎓 <b>Jami Mentorlar:</b> {counts.get('mentors', 0)} ta\n\n"
-        "Pastdagi menyu orqali kerakli bo'limni tanlang 👇"
-    )
-
-    await message.answer(
-        txt,
-        reply_markup=ADMIN_MENU,
-        parse_mode="HTML",
-    )
-
-
-# ==========================================
-# 2. XABAR YUBORISHNI BOSHLASH
+# 1. XABAR YUBORISHNI BOSHLASH
 # ==========================================
 
 @router.message(Command("broadcast", "admin_send", "xabar", "send"))

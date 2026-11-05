@@ -157,10 +157,16 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                             {course.category}
                           </span>
                         )}
-                        {course.is_enrolled && (
+                        {!course.is_waitlist && course.is_enrolled && (
                           <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-emerald-600 text-[11px] font-bold text-white shadow-xs flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
                             Sotib olingan
+                          </span>
+                        )}
+                        {course.is_waitlist && course.is_in_waitlist && (
+                          <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-emerald-600/90 backdrop-blur-md text-[11px] font-bold text-white shadow-xs flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Siz navbatdasiz
                           </span>
                         )}
                       </div>
@@ -188,13 +194,26 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                   <div className="pt-4 mt-3 border-t border-tg-secondary flex items-center justify-between">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-tg-hint block">
-                        {course.is_waitlist ? 'Kutilmoqda' : course.is_enrolled ? 'Holat' : 'Kurs narxi'}
+                        {course.is_waitlist
+                          ? course.is_in_waitlist
+                            ? 'Holat'
+                            : 'Kutilmoqda'
+                          : course.is_enrolled
+                          ? 'Holat'
+                          : 'Kurs narxi'}
                       </span>
                       {course.is_waitlist ? (
-                        <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-amber-500" />
-                          Tez kunda (Waitlist)
-                        </span>
+                        course.is_in_waitlist ? (
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            Siz navbatdasiz
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            Tez kunda (Waitlist)
+                          </span>
+                        )
                       ) : course.is_enrolled ? (
                         <span className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -217,12 +236,23 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                       }}
                       className={`py-2 px-4 rounded-xl active:scale-95 text-white font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
                         course.is_waitlist
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-500/20'
+                          ? course.is_in_waitlist
+                            ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-500/20'
                           : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
                       }`}
                     >
-                      <span>{course.is_waitlist ? 'Navbatga yozilish' : 'Batafsil'}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      {course.is_waitlist && course.is_in_waitlist ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Siz navbatdasiz</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{course.is_waitlist ? 'Navbatga yozilish' : 'Batafsil'}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

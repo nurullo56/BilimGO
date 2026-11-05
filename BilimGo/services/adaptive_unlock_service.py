@@ -29,7 +29,12 @@ class AdaptiveUnlockService:
         today = date.today().isoformat()
         latest_plan = await self._plan_repo.get_latest(student_id, course_id)
 
-        if latest_plan is not None and latest_plan.plan_date == today:
+        # Agar userbot / mentor tomonidan maxsus reja belgilanmagan bo'lsa,
+        # darslar cheklanmaydi (to'liq ochiq qoladi)
+        if latest_plan is None:
+            return None
+
+        if latest_plan.plan_date == today:
             return latest_plan.max_lessons_allowed
 
         return await self._advance_plan(student_id, course_id, today, latest_plan)

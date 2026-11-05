@@ -175,7 +175,8 @@ async def handle_waitlist_leave(callback: CallbackQuery) -> None:
     course_id = int(callback.data.split(":")[2])
     course_service = CourseService()
     res = await course_service.leave_waitlist(course_id, callback.from_user.id)
-    course_title = res["course_title"]
+    course_title = res.get("course_title", "Kurs")
+    count = res.get("waitlist_count", 0)
 
     webapp_url = f"{settings.webapp.base_url}/course/{course_id}?view=course&course_id={course_id}"
     rejoin_keyboard = InlineKeyboardMarkup(

@@ -29,6 +29,75 @@ import { PaymentModal } from './PaymentModal';
 import { triggerHaptic } from '../services/telegram';
 import { TgText } from './TgEmoji';
 
+const getCourseExpectedSyllabus = (course: Course) => {
+  if (course.syllabus) {
+    try {
+      const parsed = typeof course.syllabus === 'string' ? JSON.parse(course.syllabus) : course.syllabus;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {}
+  }
+
+  const titleLower = (course.title || '').toLowerCase();
+
+  if (titleLower.includes('china') || titleLower.includes('import') || titleLower.includes('xitoy')) {
+    return [
+      { title: "1. 1688, Taobao va Pinduoduo platformalarida ishlash", desc: "Arzon va sifatli tovarlarni qidirish hamda to'g'ridan-to'g'ri buyurtma berish", icon: "📦" },
+      { title: "2. Xitoylik ishlab chiqaruvchilar bilan savdolashish", desc: "Zavodlar bilan bevosita muzokaralar va eng yaxshi narxlarni kelishish", icon: "🤝" },
+      { title: "3. Kargo va logistika zanjirini arzon yo'lga qo'yish", desc: "Yuklarni O'zbekistonga xavfsiz va eng maqbul narxlarda yetkazish", icon: "🚚" },
+      { title: "4. Bojxona, sertifikat va rasmiylashtirish qoidalari", desc: "Barcha hujjatlarni mustaqil va qonuniy hal qilish yo'llari", icon: "📋" },
+      { title: "5. O'zbekiston bozorida brend yaratish va mahsulotni sotish", desc: "Ulgurji va chakana savdoda katta marja bilan sotish strategiyalari", icon: "💰" },
+    ];
+  }
+
+  if (titleLower.includes('kanal')) {
+    return [
+      { title: "1. Daromadli nishani tanlash va kanalni professional ochish", desc: "O'zbekiston bozorida talab yuqori bo'lgan yo'nalishlar va kanal sozlamalari", icon: "🎯" },
+      { title: "2. Qiziqarli va ushlab qoluvchi kontent-strategiya", desc: "Obunachilar doimiy kuzatadigan sifatli postlar va rubrikalar tayyorlash", icon: "✍️" },
+      { title: "3. Auditoriyani arzon va bepul usullarda jalb qilish", desc: "Organik o'sish, o'zaro reklama va obunachilar oqimini oshirish sirlari", icon: "👥" },
+      { title: "4. Reklama sotish va reklama birjalarida faol savdo qilish", desc: "Reklama beruvchilar bilan ishlash va barqaror daromadga chiqish", icon: "💳" },
+      { title: "5. Telegram kanalni avtomatlashtirish va passiv biznesga aylantirish", desc: "Botlar, menejerlar va tizimlashtirilgan doimiy foyda modeli", icon: "🚀" },
+    ];
+  }
+
+  if (titleLower.includes('ads') || titleLower.includes('reklama')) {
+    return [
+      { title: "1. Telegram Ads platformasining asosiy ishlash qoidalari", desc: "Reklama kabinetini ochish va byudjetni to'g'ri taqsimlash", icon: "📢" },
+      { title: "2. Aniq maqsadli auditoriyani (Targeting) to'g'ri belgilash", desc: "Mijozlarni qimmat bo'lmagan narxda jalb qilish sirlari", icon: "🎯" },
+      { title: "3. Konversiyasi yuqori bo'lgan reklama matnlari tuzish", desc: "Diqqatni tortuvchi va bosishga undovchi matnlar formulasi", icon: "✨" },
+      { title: "4. Byudjetni tejash va arzon narxda obunachi olish", desc: "Bid va stavkalarni professional optimallashtirish", icon: "📉" },
+      { title: "5. Natijalarni tahlil qilish va katta hajmda scaling qilish", desc: "Muvaffaqiyatli kampaniyalarni kattalashtirish va mijozlar oqimi", icon: "📊" },
+    ];
+  }
+
+  if (titleLower.includes('logist')) {
+    return [
+      { title: "1. AQSh va Yevropa yuk tashish bozoriga kirish", desc: "Yuk tashish industriyasi va dispetcherlikning asosiy tushunchalari", icon: "🚛" },
+      { title: "2. Load boardlar (DAT, Truckstop) bilan professional ishlash", desc: "Eng qimmat va daromadli yuklarni tezda topish texnikalari", icon: "💻" },
+      { title: "3. Brokerlar va haydovchilar bilan muzokaralar olib borish", desc: "Narxlarni oshirish va uzoq muddatli hamkorlik o'rnatish", icon: "📞" },
+      { title: "4. Hujjatlar aylanishi va Rate Confirmation qoidalari", desc: "Xatolarsiz hisob-kitoblar va yuklarni to'liq kuzatib borish", icon: "📑" },
+      { title: "5. Shaxsiy dispetcherlik biznesini mustaqil boshlash", desc: "Mijozlar bazasini yig'ish va mustaqil daromadga chiqish", icon: "🏆" },
+    ];
+  }
+
+  if (titleLower.includes('sayt')) {
+    return [
+      { title: "1. Daromadli veb-sayt yo'nalishini tanlash", desc: "Noldan zamonaviy va qidiruv tizimlariga mos sayt yaratish", icon: "🌐" },
+      { title: "2. SEO optimallashtirish va organik trafik yig'ish", desc: "Google qidiruvida 1-o'rinlarga chiqish sirlari", icon: "🔍" },
+      { title: "3. Google AdSense va reklama tarmoqlariga ulanish", desc: "Saytga reklama joylashtirish va har bir tashrifdan pul ishlash", icon: "💵" },
+      { title: "4. Hamkorlik (Affiliate) dasturlari orqali sotuv qilish", desc: "CPA tarmoqlar va tavsiyaviy havolalar orqali daromad", icon: "🤝" },
+      { title: "5. Saytni avtomatik daromad manbaiga aylantirish", desc: "Passiv trafik va barqaror oylik daromad tizimini qurish", icon: "📈" },
+    ];
+  }
+
+  return [
+    { title: "1. Sun'iy Intellekt va ChatGPT Asoslari (Prompt muhandisligi)", desc: "To'g'ri buyruqlar berish va sun'iy intellektdan 10x samarali foydalanish", icon: "🧠" },
+    { title: "2. Midjourney va AI Vizual Dizayn generatsiyasi", desc: "Biznes, ijtimoiy tarmoqlar va bannerlar uchun professional rasmlar yaratish", icon: "🎨" },
+    { title: "3. Telegram AI Botlar va Aqlli Agentlar yaratish", desc: "Mijozlarga avtomatik xizmat ko'rsatuvchi sun'iy intellekt botlarini kodsiz ishga tushirish", icon: "🤖" },
+    { title: "4. Ma'lumotlar tahlili va Biznes jarayonlarini avtomatlashtirish", desc: "Kundalik takroriy ishlarni AI yordamida avtomatik boshqarish", icon: "⚡" },
+    { title: "5. Shaxsiy AI yordamchi va Katta loyihalar bilan integratsiya", desc: "Kompaniya bilimlari asosida ishlovchi maxsus AI yordamchini o'rgatish", icon: "🚀" },
+  ];
+};
+
 interface CourseDetailViewProps {
   courseId: string | number;
   onNavigate: (view: AppView) => void;
@@ -191,6 +260,16 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
             <p className="text-xs sm:text-sm text-tg-text/90 leading-relaxed">
               <TgText>{course.description}</TgText>
             </p>
+          )}
+
+          {/* Maxsus Chegirma / E'lon Bloki (image.png dagi belgilangan joy) */}
+          {course.notice_text && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 shadow-xs">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <span className="text-xs sm:text-sm font-semibold text-amber-700 dark:text-amber-300 leading-snug">
+                {course.notice_text}
+              </span>
+            </div>
           )}
 
           {/* Instructor & stats chips */}
@@ -437,13 +516,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
           </div>
 
           <div className="space-y-2.5 pt-1">
-            {[
-              { title: "1. Sun'iy Intellekt va ChatGPT Asoslari (Prompt muhandisligi)", desc: "To'g'ri buyruqlar berish va sun'iy intellektdan 10x samarali foydalanish", icon: "🧠" },
-              { title: "2. Midjourney va AI Vizual Dizayn generatsiyasi", desc: "Biznes, ijtimoiy tarmoqlar va bannerlar uchun professional rasmlar yaratish", icon: "🎨" },
-              { title: "3. Telegram AI Botlar va Aqlli Agentlar yaratish", desc: "Mijozlarga avtomatik xizmat ko'rsatuvchi sun'iy intellekt botlarini kodsiz ishga tushirish", icon: "🤖" },
-              { title: "4. Ma'lumotlar tahlili va Biznes jarayonlarini avtomatlashtirish", desc: "Kundalik takroriy ishlarni AI yordamida avtomatik boshqarish", icon: "⚡" },
-              { title: "5. Shaxsiy AI yordamchi va Katta loyihalar bilan integratsiya", desc: "Kompaniya bilimlari asosida ishlovchi maxsus AI yordamchini o'rgatish", icon: "🚀" },
-            ].map((item, idx) => (
+            {getCourseExpectedSyllabus(course).map((item, idx) => (
               <div key={idx} className="p-3.5 rounded-2xl bg-tg-secondary/40 border border-tg-secondary/60 flex items-start gap-3">
                 <span className="text-lg shrink-0">{item.icon}</span>
                 <div className="space-y-0.5 min-w-0">

@@ -40,11 +40,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="BilimGo API", lifespan=lifespan)
 
-# Enable CORS for React Frontend (vite/dev server on port 3000 / 5173 / any)
+# Enable CORS for Telegram WebApp and Frontend dev servers
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+if getattr(settings, "webapp", None) and getattr(settings.webapp, "base_url", None):
+    cors_origins.append(settings.webapp.base_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins if not settings.debug else ["*"],
+    allow_origin_regex=r"^https:\/\/.*\.telegram\.org$",
+    allow_credentials=True if not settings.debug else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

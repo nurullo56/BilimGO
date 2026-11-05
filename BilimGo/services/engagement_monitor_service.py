@@ -4,10 +4,10 @@ from db.repositories.engagement_repo import EngagementRepository, NudgeRepositor
 
 # Bosqichlar bo'yicha eskalatsiya xabar shablonlari
 NUDGE_STEPS: dict[int, str] = {
-    1: "Salom{name}! 📚 Darslaringiz sizni kutmoqda — bugun ozgina vaqt ajratib, o'quv jarayonini davom ettiramizmi? 🙂",
-    2: "Salom{name}! ⏳ 2 kundan beri platformada faol ko'rinmaysiz. O'rganishda davomiylik juda muhim. Bugun yangi darsni ko'ramizmi?",
-    3: "Salom{name}! 💬 Mentoringiz sizni kutmoqda. Biror tushunmovchilik yoki savollar bo'lsa, chat orqali bemalol murojaat qiling!",
-    4: "Salom{name}! 🚀 Kursni davom ettirish uchun platforma har doim sizga ochiq. Har qanday katta natija kichik va davomiy qadamlardan boshlanadi!",
+    1: "Salom! 📚 Darslaringiz sizni kutmoqda — bugun ozgina vaqt ajratib, o'quv jarayonini davom ettiramizmi? 🙂",
+    2: "Salom! ⏳ 2 kundan beri platformada faol ko'rinmaysiz. O'rganishda davomiylik juda muhim. Bugun yangi darsni ko'ramizmi?",
+    3: "Salom! 💬 Mentoringiz sizni kutmoqda. Biror tushunmovchilik yoki savollar bo'lsa, chat orqali bemalol murojaat qiling!",
+    4: "Salom! 🚀 Kursni davom ettirish uchun platforma har doim sizga ochiq. Har qanday katta natija kichik va davomiy qadamlardan boshlanadi!",
 }
 MAX_NUDGE_STEPS = max(NUDGE_STEPS)
 
@@ -18,6 +18,15 @@ class EngagementMonitorService:
     ) -> None:
         self._engagement_repo = engagement_repo
         self._nudge_repo = nudge_repo
+
+    @classmethod
+    def create_default(cls, conn=None) -> EngagementMonitorService:
+        from db.database import database
+        connection = conn or database.conn
+        return cls(
+            engagement_repo=EngagementRepository(connection),
+            nudge_repo=NudgeRepository(connection),
+        )
 
     async def touch_activity(self, user_id: int) -> None:
         """Talaba faol harakat qilganda chaqiriladi (masalan video ko'rganda)."""

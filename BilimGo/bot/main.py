@@ -15,6 +15,7 @@ from bot.handlers.admin.broadcast import router as admin_broadcast_router
 from bot.handlers.admin.quota import router as admin_quota_router
 from bot.handlers.admin.statistics import router as admin_stats_router
 from bot.handlers.admin.mentor_approval import router as mentor_approval_router
+from bot.handlers.admin.course_waitlist import router as admin_waitlist_router
 from bot.handlers.common.cabinet_link import router as cabinet_link_router
 from bot.handlers.common.mentor_add import router as mentor_add_router
 from bot.handlers.common.profile import router as profile_router
@@ -88,6 +89,7 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(admin_stats_router)
     dp.include_router(admin_broadcast_router)
     dp.include_router(admin_quota_router)
+    dp.include_router(admin_waitlist_router)
     dp.include_router(start_router)
     dp.include_router(mentor_add_router)
     dp.include_router(mentor_approval_router)

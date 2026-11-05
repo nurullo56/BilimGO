@@ -116,17 +116,18 @@ class LessonViewRepository(BaseRepository):
 
     async def get_daily_activity_map(self, user_id: int, days: int = 30) -> dict[str, dict]:
         """Oxirgi kunlar bo'yicha kunlik faollik xaritasini oladi."""
+        days_int = int(days)
         cursor = await self._conn.execute(
-            f"""
+            """
             SELECT 
                 date(started_at) as view_date,
                 COUNT(id) as views_count,
                 COALESCE(SUM(watch_duration_sec), 0) as total_sec
             FROM lesson_views
-            WHERE user_id = ? AND started_at >= datetime('now', '-{days} days')
+            WHERE user_id = ? AND started_at >= datetime('now', '-' || ? || ' days')
             GROUP BY date(started_at)
             """,
-            (user_id,),
+            (user_id, days_int),
         )
         rows = await cursor.fetchall()
         return {r["view_date"]: dict(r) for r in rows}

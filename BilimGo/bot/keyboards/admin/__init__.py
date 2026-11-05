@@ -7,6 +7,7 @@ from bot.keyboards.admin.menu_kb import (
     get_admin_menu,
     get_admin_inline_webapp,
     get_admin_panel_keyboard,
+    get_admin_courses_waitlist_keyboard,
     ADMIN_MENU,
 )
 from bot.keyboards.admin.broadcast_kb import (
@@ -28,6 +29,7 @@ __all__ = [
     "get_admin_menu",
     "get_admin_inline_webapp",
     "get_admin_panel_keyboard",
+    "get_admin_courses_waitlist_keyboard",
     "ADMIN_MENU",
     # broadcast
     "get_broadcast_target_keyboard",

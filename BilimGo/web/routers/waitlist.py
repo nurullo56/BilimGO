@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from core.config import settings
 from db.database import database
 from db.repositories.notification_repo import NotificationRepository
+from db.repositories.course_repo import CourseRepository
 from db.repositories.user_repo import UserRepository
 from db.repositories.waitlist_repo import WaitlistRepository
 from services.admin_notifier import admin_notifier
@@ -84,13 +85,16 @@ async def join_course_waitlist(
     await repo.join_waitlist(course_id, user.id, phone)
     count = await repo.get_count(course_id)
 
+    course = await CourseRepository(conn).get_by_id(course_id)
+    course_title = course.title if course else "Kurs"
+
     # 1. Mini App ichki bildirishnomasi
     try:
         await notif_repo.create_notification(
             user_id=user.id,
             type="system",
-            title="AI Kursi Navbatiga yozildingiz! 🤖",
-            message="Siz Sun'iy Intellekt (AI) kursi kutish ro'yxatiga (waitlist) muvaffaqiyatli qo'shildingiz. Kurs ochilishi bilan bot orqali sizga birinchi bo'lib xabar yuboramiz!",
+            title=f"{course_title} navbatiga yozildingiz! 🎉",
+            message=f"Siz {course_title} kursi kutish ro'yxatiga (waitlist) muvaffaqiyatli qo'shildingiz. Kurs ochilishi bilan bot orqali sizga birinchi bo'lib xabar yuboramiz!",
             link=f"/course/{course_id}",
         )
     except Exception as e:
@@ -99,9 +103,9 @@ async def join_course_waitlist(
     # 2. Foydalanuvchining shaxsiy Telegramiga tasdiqlovchi xabar yuborish
     user_name = html.escape(user.full_name or "Do'stim")
     user_msg = (
-        f"🤖 <b>Sun'iy Intellekt (AI) kursi navbatiga yozildingiz!</b>\n\n"
-        f"Hurmatli <b>{user_name}</b>, siz Sun'iy Intellekt (AI) kursi kutish roʻyxatiga (Waitlist) muvaffaqiyatli qoʻshildingiz! 🎉\n\n"
-        f"📌 <b>Kurs:</b> Sun'iy Intellekt (AI) Asoslari\n"
+        f"🎉 <b>{course_title} navbatiga yozildingiz!</b>\n\n"
+        f"Hurmatli <b>{user_name}</b>, siz <b>{course_title}</b> kursi kutish roʻyxatiga (Waitlist) muvaffaqiyatli qoʻshildingiz! 🎉\n\n"
+        f"📌 <b>Kurs:</b> {course_title}\n"
         f"📊 <b>Sizning navbatingiz:</b> #{count}-oʻrin\n"
         f"⏳ <b>Holat:</b> Darslar yakuniy tahrirda va tez kunda eʼlon qilinadi.\n\n"
         f"Kurs ochilishi bilan sizga bot orqali maxsus chegirma va taklif bilan xabar yuboramiz! 🚀"
@@ -111,7 +115,7 @@ async def join_course_waitlist(
 
     # 3. Administratorlarga yangi navbat haqida ogohlantirish yuborish (Topic 8: Mentorlar va o'quvchilar)
     admin_msg = (
-        f"📋 <b>Yangi o'quvchi AI kursi navbatiga yozildi!</b>\n\n"
+        f"📋 <b>Yangi o'quvchi {course_title} navbatiga yozildi!</b>\n\n"
         f"👤 <b>Foydalanuvchi:</b> {user_name} (ID: <code>{user.telegram_id}</code>)\n"
         f"📱 <b>Telefon:</b> <code>{phone or 'Kiritilmagan'}</code>\n"
         f"📊 <b>Jami navbatdagilar:</b> <b>{count} ta</b>"

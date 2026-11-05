@@ -135,4 +135,5 @@ class LicenseNodeRepository(BaseRepository):
             "UPDATE license_nodes SET course_id = ? WHERE id = ?",
             (course_id, node_id),
         )
+        await self._conn.commit()
 

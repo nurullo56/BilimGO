@@ -7,20 +7,6 @@ class BroadcastRepository:
         self.db = database
 
     async def create_broadcast(self, admin_id: int, target_type: str, total_count: int) -> int:
-        await self.db.conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS broadcasts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_id INTEGER NOT NULL,
-                target_type TEXT NOT NULL,
-                total_count INTEGER DEFAULT 0,
-                sent_count INTEGER DEFAULT 0,
-                failed_count INTEGER DEFAULT 0,
-                status TEXT DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
         cursor = await self.db.conn.execute(
             "INSERT INTO broadcasts (admin_id, target_type, total_count, status) VALUES (?, ?, ?, 'in_progress')",
             (admin_id, target_type, total_count),

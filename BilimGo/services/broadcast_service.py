@@ -70,8 +70,6 @@ class BroadcastService:
 
         return []
 
-        return []
-
     async def execute_broadcast(
         self,
         bot: Bot,

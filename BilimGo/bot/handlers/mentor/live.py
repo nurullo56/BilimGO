@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -167,6 +168,7 @@ async def notify_students(callback: CallbackQuery, bot: Bot) -> None:
                 parse_mode="HTML",
             )
             sent_count += 1
+            await asyncio.sleep(0.05)
         except Exception as e:
             logger.debug(f"Live notify to {s['telegram_id']} failed: {e}")
 

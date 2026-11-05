@@ -25,6 +25,9 @@ def get_admin_menu(webapp_url: str | None = None) -> ReplyKeyboardMarkup:
                 KeyboardButton(text="📊 Platforma statistikasi"),
             ],
             [
+                KeyboardButton(text="⏳ Kurslar Waitlist (Navbat)"),
+            ],
+            [
                 KeyboardButton(text="➕ Yangi Mentor qo'shish"),
                 KeyboardButton(text="👥 Barcha Mentorlar"),
             ],
@@ -86,8 +89,34 @@ def get_admin_panel_keyboard(webapp_url: str | None = None) -> InlineKeyboardMar
                     callback_data="admin_action:stats",
                 )
             ],
+            [
+                InlineKeyboardButton(
+                    text="⏳ Kurslar Waitlist (Navbat)",
+                    callback_data="admin_action:waitlist",
+                )
+            ],
         ]
     )
+
+
+def get_admin_courses_waitlist_keyboard(courses: list) -> InlineKeyboardMarkup:
+    buttons = []
+    for c in courses:
+        icon = "⏳" if getattr(c, "is_waitlist", False) else "🟢"
+        status_label = "Waitlist" if getattr(c, "is_waitlist", False) else "Sotuvda"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{icon} {c.title} — ({status_label})",
+                callback_data=f"admin_waitlist:toggle:{c.id}",
+            )
+        ])
+    buttons.append([
+        InlineKeyboardButton(
+            text="🔙 Admin Menyusiga Qaytish",
+            callback_data="admin_action:back_to_menu",
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 ADMIN_MENU = get_admin_menu()

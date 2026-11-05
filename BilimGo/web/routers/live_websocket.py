@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 
@@ -9,6 +10,7 @@ from core.config import settings
 from db.database import database
 from db.repositories.user_repo import UserRepository
 from services.live_stream_service import live_manager
+from web.dependencies.auth import _compute_hash
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +24,32 @@ async def live_websocket(
 ):
     """Live WebSocket endpoint"""
     try:
-        # Query parameterdan telegram_id olish
-        telegram_id_raw = websocket.query_params.get("user_id", "0")
-        try:
-            telegram_id = int(telegram_id_raw)
-        except ValueError:
-            telegram_id = 0
+        # WebSocket ulanishida avtentifikatsiya tekshiruvi:
+        telegram_id = 0
+        init_data = websocket.query_params.get("init_data")
+        if init_data:
+            try:
+                computed_hash, parsed = _compute_hash(init_data, settings.bot.token)
+                received_hash = parsed.get("received_hash", "")
+                is_valid = bool(received_hash and hmac.compare_digest(computed_hash, received_hash))
+                if is_valid or settings.debug:
+                    user_raw = parsed.get("user")
+                    if user_raw:
+                        user_data = json.loads(user_raw)
+                        telegram_id = int(user_data.get("id", 0))
+            except Exception as e:
+                logger.warning("WebSocket init_data parsing xatosi: %s", e)
+
+        # Agar init_data berilmagan bo'lsa, faqat DEBUG rejimida query user_id ga ruxsat beriladi
+        if not telegram_id:
+            telegram_id_raw = websocket.query_params.get("user_id", "0")
+            if settings.debug:
+                try:
+                    telegram_id = int(telegram_id_raw)
+                except ValueError:
+                    telegram_id = 0
+            else:
+                logger.warning("WebSocket ulanish rad etildi (init_data talab qilinadi): ip=%s", websocket.client)
 
         if not telegram_id:
             await websocket.close(code=4001, reason="Authentication required")

@@ -74,8 +74,16 @@ class Database:
                 await self.conn.commit()
                 logger.info("Migratsiya qo'llandi: %s", migration_file.name)
             except aiosqlite.Error as exc:
-                await self.conn.rollback()
-                raise MigrationError(f"{migration_file.name} bajarilmadi: {exc}") from exc
+                if "duplicate column name" in str(exc).lower():
+                    await self.conn.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES (?)",
+                        (migration_file.name,),
+                    )
+                    await self.conn.commit()
+                    logger.info("Migratsiya o'tkazildi (ustun allaqachon mavjud): %s", migration_file.name)
+                else:
+                    await self.conn.rollback()
+                    raise MigrationError(f"{migration_file.name} bajarilmadi: {exc}") from exc
 
 
 database = Database(settings.db.path)

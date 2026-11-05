@@ -79,14 +79,15 @@ export function enhanceCourse(c: any): Course {
   const t = title.toLowerCase();
   
   let category = c.category;
-  let thumbnail = c.thumbnail;
+  let thumbnail = c.image_url || c.thumbnail;
   let instructor = c.instructor || 'Nurulloh Habibullayev (Bosh Mentor)';
 
   if (!category) {
     if (t.includes('logist')) category = 'Logistika & Dispetcherlik';
     else if (t.includes('ads') || t.includes('reklama')) category = 'Telegram Marketing';
     else if (t.includes('konkurs') || t.includes('aksiya')) category = 'Biznes & Konkurs';
-    else if (t.includes('sayt') || t.includes('daromad')) category = 'Web & Monetizatsiya';
+    else if (t.includes('sayt')) category = 'Web & Monetizatsiya';
+    else if (t.includes('kanal')) category = 'Telegram Kanallar & Daromad';
     else if (t.includes('xitoy') || t.includes('import') || t.includes('chinaseller')) category = 'Savdo & Import';
     else if (t.includes('python') || t.includes('backend')) category = 'Backend Dasturlash';
     else if (t.includes('ai') || t.includes('intellekt') || t.includes("sun'iy")) category = "Sun'iy Intellekt (AI)";
@@ -101,8 +102,10 @@ export function enhanceCourse(c: any): Course {
       thumbnail = 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60';
     } else if (t.includes('konkurs') || t.includes('aksiya')) {
       thumbnail = 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop&q=60';
-    } else if (t.includes('sayt') || t.includes('daromad')) {
+    } else if (t.includes('sayt')) {
       thumbnail = 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60';
+    } else if (t.includes('kanal')) {
+      thumbnail = 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=60';
     } else if (t.includes('ai') || t.includes('intellekt') || t.includes("sun'iy")) {
       thumbnail = '/assets/ai_course.jpg';
     } else if (t.includes('xitoy') || t.includes('import') || t.includes('chinaseller')) {
@@ -118,14 +121,18 @@ export function enhanceCourse(c: any): Course {
     title,
     category,
     thumbnail,
+    image_url: c.image_url || thumbnail,
+    notice_text: c.notice_text,
+    syllabus: c.syllabus,
     instructor,
     base_price: Number(c.base_price) || 0,
     owner_node_id: c.owner_node_id || 1,
-    is_enrolled: Boolean(c.is_enrolled || c.has_access),
-    has_access: Boolean(c.has_access || c.is_enrolled),
+    is_waitlist: Boolean(c.is_waitlist),
+    is_in_waitlist: Boolean(c.is_in_waitlist),
+    is_enrolled: Boolean(c.is_waitlist ? false : (c.is_enrolled || c.has_access)),
+    has_access: Boolean(c.is_waitlist ? false : (c.has_access || c.is_enrolled)),
     total_lessons: c.total_lessons || 0,
     total_duration_minutes: c.total_duration_minutes || (c.total_duration_sec ? Math.round(c.total_duration_sec / 60) : 0),
-    is_waitlist: Boolean(c.is_waitlist || t.includes('ai') || t.includes("sun'iy intellekt")),
   };
 }
 

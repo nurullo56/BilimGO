@@ -27,6 +27,7 @@ from db.repositories.lesson_view_repo import LessonViewRepository
 from db.repositories.license_node_repo import LicenseNodeRepository
 from db.repositories.unlock_tier_repo import UnlockTierRuleRepository
 from db.repositories.user_repo import UserRepository
+from db.repositories.waitlist_repo import WaitlistRepository
 from services.access_control_service import AccessControlService
 from services.adaptive_unlock_service import AdaptiveUnlockService
 from services.analytics_service import AnalyticsService
@@ -80,7 +81,7 @@ async def list_courses(
     access_grant_repo = AccessGrantRepository(conn)
     views_repo = LessonViewRepository(conn)
 
-    is_admin = user.role in ("admin", "super_mentor") or user.telegram_id in settings.bot.admin_ids
+    is_admin = user.role in ("admin", "super_mentor", "mentor") or user.telegram_id in settings.bot.admin_ids
     is_mentor = user.role == "mentor"
     courses = await course_repo.list_published()
     results = []
@@ -98,6 +99,11 @@ async def list_courses(
             is_enrolled = False
 
         has_access = is_admin or is_mentor or is_enrolled
+        is_in_waitlist = False
+        if c.is_waitlist:
+            is_in_waitlist = await WaitlistRepository(conn).is_in_waitlist(c.id, user.id)
+            is_enrolled = False
+            has_access = False
 
         total_lessons = len(lessons)
         completed_lessons = sum(
@@ -118,6 +124,10 @@ async def list_courses(
                 "description": c.description,
                 "base_price": c.base_price,
                 "is_waitlist": bool(c.is_waitlist),
+                "is_in_waitlist": is_in_waitlist,
+                "image_url": c.image_url,
+                "notice_text": c.notice_text,
+                "syllabus": c.syllabus,
                 "owner_node_id": c.owner_node_id or 1,
                 "has_access": has_access,
                 "is_enrolled": is_enrolled,
@@ -152,7 +162,7 @@ async def get_course_by_id(
     lessons = await lesson_repo.list_by_course(c.id)
     progress_list = await views_repo.student_progress_for_course(user.id, c.id)
 
-    is_admin = user.role in ("admin", "super_mentor") or user.telegram_id in settings.bot.admin_ids
+    is_admin = user.role in ("admin", "super_mentor", "mentor") or user.telegram_id in settings.bot.admin_ids
     is_mentor = user.role == "mentor"
     
     # Aynan shu kurs uchun sotib olinganlik holati
@@ -165,6 +175,11 @@ async def get_course_by_id(
         is_enrolled = False
 
     has_access = is_admin or is_mentor or is_enrolled
+    is_in_waitlist = False
+    if c.is_waitlist:
+        is_in_waitlist = await WaitlistRepository(conn).is_in_waitlist(c.id, user.id)
+        is_enrolled = False
+        has_access = False
 
     total_lessons = len(lessons)
     completed_lessons = sum(
@@ -184,6 +199,10 @@ async def get_course_by_id(
         "description": c.description,
         "base_price": c.base_price,
         "is_waitlist": bool(c.is_waitlist),
+        "is_in_waitlist": is_in_waitlist,
+        "image_url": c.image_url,
+        "notice_text": c.notice_text,
+        "syllabus": c.syllabus,
         "owner_node_id": c.owner_node_id,
         "has_access": has_access,
         "is_enrolled": is_enrolled,
@@ -192,6 +211,45 @@ async def get_course_by_id(
         "total_duration_sec": total_duration,
         "total_duration_minutes": round(total_duration / 60),
         "tariffs": await CourseTariffRepository(conn).get_by_course_id(c.id),
+    }
+
+
+class CourseCustomizePayload(BaseModel):
+    notice_text: str | None = None
+    image_url: str | None = None
+    syllabus: str | None = None
+
+
+@router.patch("/courses/{course_id}/customize")
+async def update_course_customization(
+    course_id: int,
+    payload: CourseCustomizePayload,
+    telegram_id: int = Depends(get_current_telegram_id),
+) -> dict:
+    conn = database.conn
+    user_repo = UserRepository(conn)
+    user = await user_repo.get_or_create(telegram_id=telegram_id)
+    is_admin = user.role in ("admin", "super_mentor", "mentor") or user.telegram_id in settings.bot.admin_ids
+    if not is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat adminlar uchun ruxsat berilgan")
+
+    course_repo = CourseRepository(conn)
+    course = await course_repo.get_by_id(course_id)
+    if not course:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Kurs topilmadi")
+
+    if payload.notice_text is not None:
+        await course_repo.update_notice_text(course_id, payload.notice_text)
+    if payload.image_url is not None:
+        await course_repo.update_image_url(course_id, payload.image_url)
+
+    updated = await course_repo.get_by_id(course_id)
+    return {
+        "ok": True,
+        "course_id": course_id,
+        "title": updated.title if updated else "",
+        "notice_text": updated.notice_text if updated else None,
+        "image_url": updated.image_url if updated else None,
     }
 
 
@@ -215,7 +273,7 @@ async def list_course_lessons(
     progress_list = await views_repo.student_progress_for_course(user.id, course_id)
     progress_map = {p["lesson_id"]: p for p in progress_list}
 
-    is_admin = user.role in ("admin", "super_mentor") or user.telegram_id in settings.bot.admin_ids
+    is_admin = user.role in ("admin", "super_mentor", "mentor") or user.telegram_id in settings.bot.admin_ids
     has_course_access = is_admin or await access_grant_repo.has_active_access(
         user_id=user.id, lesson_id=lessons[0].id if lessons else 0, course_id=course_id
     )

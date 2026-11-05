@@ -21,7 +21,6 @@ router = Router(name="admin_stats")
 @router.message(Command("admin"))
 async def handle_admin_command(message: Message, state: FSMContext) -> None:
     logger.info("Admin buyrug'i chaqirildi: tg_id=%s", message.from_user.id if message.from_user else 0)
-    logger.info("Admin buyrug'i chaqirildi: tg_id=%s", message.from_user.id if message.from_user else 0)
     user_id = message.from_user.id if message.from_user else 0
     if user_id not in settings.bot.admin_ids:
         await message.answer("Sizda ushbu buyruqdan foydalanish huquqi yo'q.")

@@ -74,6 +74,9 @@ class CourseService:
             "status": course.status,
             "description": course.description,
             "created_at": course.created_at,
+            "image_url": course.image_url,
+            "notice_text": course.notice_text,
+            "syllabus": course.syllabus,
         }
         d["tariffs"] = await self.tariff_repo.get_by_course_id(course_id)
         return d
@@ -149,4 +152,37 @@ class CourseService:
             "user": user,
             "waitlist_count": count,
             "course_title": course.title if course else "AI Kursi",
+        }
+
+    async def toggle_waitlist(self, course_id: int) -> dict[str, Any]:
+        """Kursning waitlist holatini almashtiradi (toggle) va yangi holatni qaytaradi."""
+        course = await self.course_repo.get_by_id(course_id)
+        if not course:
+            raise ValueError(f"Kurs topilmadi: {course_id}")
+        new_status = not course.is_waitlist
+        await self.course_repo.update_waitlist_status(course_id, new_status)
+        return {
+            "course_id": course_id,
+            "title": course.title,
+            "is_waitlist": new_status,
+        }
+
+    async def set_course_notice(self, course_id: int, notice_text: Optional[str]) -> dict[str, Any]:
+        """Kursning maxsus e'lon/chegirma matnini yangilaydi."""
+        await self.course_repo.update_notice_text(course_id, notice_text)
+        course = await self.course_repo.get_by_id(course_id)
+        return {
+            "course_id": course_id,
+            "title": course.title if course else "",
+            "notice_text": notice_text,
+        }
+
+    async def set_course_image(self, course_id: int, image_url: Optional[str]) -> dict[str, Any]:
+        """Kursning muqova rasmini (URL) yangilaydi."""
+        await self.course_repo.update_image_url(course_id, image_url)
+        course = await self.course_repo.get_by_id(course_id)
+        return {
+            "course_id": course_id,
+            "title": course.title if course else "",
+            "image_url": image_url,
         }
