@@ -9,6 +9,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from bot.keyboards.mentor import get_mentor_card_manage_keyboard
+from bot.handlers.common.profile import _resolve_bot_username
 from db.repositories.user_repo import User
 from services.cabinet_service import CabinetService
 from services.mentor_service import MentorService
@@ -108,11 +109,10 @@ async def show_referral_link(message: Message, user: User) -> None:
         return
 
     node_id, courses = ref_data
-    bot_info = await message.bot.get_me()
-    bot_username = bot_info.username or "BilimGoUz_Bot"
+    bot_username = await _resolve_bot_username(message.bot)
 
-    lines = [
-        "🔗 <b>Sizning Shaxsiy Kurs Havolalaringiz:</b>\n",
+    part1_lines = [
+        "🔗 <b>Sizning Shaxsiy Kurs Havolalaringiz (1/2):</b>\n",
         "O'z shogirdlaringizga mos havolani yuboring. Talaba havola orqali kirganda <b>aynan sizning kabinetingizga</b> birikadi:\n",
         "💳 <b>1. ONLINE SOTUV HAVOLALARI (Talaba Click/Payme orqali to'laydi):</b>",
         "<i>Talabaga yuborasiz, u Mini Appda to'lov qilgach darslar ochiladi va sotuv hisobingizga yoziladi:</i>",
@@ -120,22 +120,25 @@ async def show_referral_link(message: Message, user: User) -> None:
 
     for c in courses:
         ref_link = f"https://t.me/{bot_username}?start=node_{node_id}_course_{c.id}"
-        lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{ref_link}</code>")
+        part1_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{ref_link}</code>")
 
-    lines.append("\n🎁 <b>2. LICHKADA TO'LAGANLAR UCHUN (To'g'ridan-to'g'ri ochiq havola):</b>")
-    lines.append(
-        "<i>Agar talaba pulni kartangizga yoki naqd to'lagan bo'lsa, ushbu havolani bering. Darslar darhol ochiladi:</i>"
-    )
+    part1_lines.append("\n💡 <i>Nusxalash uchun havola ustiga bir marta bosing.</i>")
+
+    part2_lines = [
+        "🎁 <b>Lichkada To'laganlar Uchun Havolalar (2/2):</b>\n",
+        "<i>Agar talaba pulni kartangizga yoki naqd to'lagan bo'lsa, ushbu havolani bering. Darslar darhol ochiladi:</i>",
+    ]
 
     for c in courses:
         open_link = f"https://t.me/{bot_username}?start=open_node_{node_id}_course_{c.id}"
-        lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{open_link}</code>")
+        part2_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{open_link}</code>")
 
     general_link = f"https://t.me/{bot_username}?start=node_{node_id}"
-    lines.append(f"\n🏢 <b>Umumiy Kabinetingizga taklif havolasi:</b>\n👉 <code>{general_link}</code>")
-    lines.append("\n💡 <i>Nusxalash uchun istalgan havola ustiga bir marta bosing.</i>")
+    part2_lines.append(f"\n🏢 <b>Umumiy Kabinetingizga taklif havolasi:</b>\n👉 <code>{general_link}</code>")
+    part2_lines.append("\n💡 <i>Nusxalash uchun havola ustiga bir marta bosing.</i>")
 
-    await message.answer("\n".join(lines))
+    await message.answer("\n".join(part1_lines))
+    await message.answer("\n".join(part2_lines))
 
 
 @router.message(F.text == "💳 Ulangan karta (Avto-to'lov)")

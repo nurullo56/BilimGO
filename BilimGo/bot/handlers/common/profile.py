@@ -20,6 +20,26 @@ from services.user_service import UserService
 logger = logging.getLogger(__name__)
 router = Router(name="common_profile")
 
+_CACHED_BOT_USERNAME: str | None = None
+
+
+async def _resolve_bot_username(bot: Bot) -> str:
+    global _CACHED_BOT_USERNAME
+    if _CACHED_BOT_USERNAME:
+        return _CACHED_BOT_USERNAME
+    try:
+        bot_info = await bot.get_me()
+        if bot_info and bot_info.username:
+            _CACHED_BOT_USERNAME = bot_info.username
+            return _CACHED_BOT_USERNAME
+    except Exception as exc:
+        logger.warning("bot.get_me() chaqiruvida tarmoq xatosi: %s, zaxira nom ishlatiladi", exc)
+    fallback = getattr(getattr(bot, "_me", None), "username", None)
+    if fallback:
+        _CACHED_BOT_USERNAME = fallback
+        return fallback
+    return "BilimGoUz_Bot"
+
 
 @router.message(Command("profile"))
 @router.message(F.text.in_([
@@ -65,13 +85,12 @@ async def handle_course_links(message: Message, user: User, bot: Bot) -> None:
         return
 
     node_id = node.id if node else 1
-    bot_info = await bot.get_me()
-    bot_username = bot_info.username or "BilimGoUz_Bot"
+    bot_username = await _resolve_bot_username(bot)
 
     courses = await CourseService().list_published()
 
-    text_lines = [
-        "🔗 <b>Sizning Shaxsiy Kurs Havolalaringiz (Sizga birikadi):</b>\n",
+    part1_lines = [
+        "🔗 <b>Sizning Shaxsiy Kurs Havolalaringiz (1/2):</b>\n",
         "O'z shogirdlaringizga mos havolani yuboring. O'quvchi havola orqali kirganida, <b>aynan sizning kabinetingizga</b> birikadi:\n",
         "💳 <b>1. ONLINE SOTUV HAVOLALARI (Talaba Click/Payme orqali to'laydi):</b>",
         "<i>Talabaga yuborasiz, u Mini Appda to'lov qilgach darslar ochiladi va sotuv hisobingizga yoziladi:</i>",
@@ -79,17 +98,22 @@ async def handle_course_links(message: Message, user: User, bot: Bot) -> None:
 
     for c in courses:
         ref_link = f"https://t.me/{bot_username}?start=node_{node_id}_course_{c.id}"
-        text_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{ref_link}</code>")
+        part1_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{ref_link}</code>")
 
-    text_lines.append("\n🎁 <b>2. LICHKADA TO'LAGANLAR UCHUN (To'g'ridan-to'g'ri ochiq havola):</b>")
-    text_lines.append("<i>Agar talaba pulni kartangizga yoki naqd to'lagan bo'lsa, ushbu havolani bering. Darslar darhol ochiladi:</i>")
+    part1_lines.append("\n💡 <i>Nusxalash uchun havola ustiga bir marta bosing.</i>")
+
+    part2_lines = [
+        "🎁 <b>Lichkada To'laganlar Uchun Havolalar (2/2):</b>\n",
+        "<i>Agar talaba to'lovni kartangizga yoki naqd to'lagan bo'lsa, ushbu havolani bering. Darslar darhol ochiladi:</i>",
+    ]
 
     for c in courses:
         open_link = f"https://t.me/{bot_username}?start=open_node_{node_id}_course_{c.id}"
-        text_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{open_link}</code>")
+        part2_lines.append(f"• <b>{c.title}</b>:\n  👉 <code>{open_link}</code>")
 
     general_link = f"https://t.me/{bot_username}?start=node_{node_id}"
-    text_lines.append(f"\n🏢 <b>Umumiy Kabinetingizga taklif havolasi:</b>\n👉 <code>{general_link}</code>")
-    text_lines.append("\n💡 <i>Nusxalash uchun istalgan havola ustiga bir marta bosing.</i>")
+    part2_lines.append(f"\n🏢 <b>Umumiy Kabinetingizga taklif havolasi:</b>\n👉 <code>{general_link}</code>")
+    part2_lines.append("\n💡 <i>Nusxalash uchun havola ustiga bir marta bosing.</i>")
 
-    await message.answer("\n".join(text_lines))
+    await message.answer("\n".join(part1_lines))
+    await message.answer("\n".join(part2_lines))
