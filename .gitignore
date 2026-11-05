@@ -56,11 +56,11 @@ Desktop.ini
 *.flag
 restart.flag
 
-# Temporary scratch/analysis scripts
+# Temporary scratch/analysis scripts & screenshots
 crop_nav.py
 sample_colors.py
 export_project_to_txt.py
 check_live.py
 folder_stats.py
 nav_*.png
-image copy*.png
+image*.png

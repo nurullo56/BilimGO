@@ -100,7 +100,7 @@ async def handle_start(message: Message, user: User, command: CommandObject, bot
 
     # 3. Mentor onboarding
     if (is_mentor_invite or user.role == "mentor") and user.role != "admin":
-        user_service = UserService()
+        user_service = UserService.create_default()
         await user_service.update_role(user.id, "mentor")
         user = await user_service.get_by_id(user.id) or user
 
@@ -204,7 +204,7 @@ async def handle_contact(message: Message, user: User, bot: Bot, state: FSMConte
     if not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
 
-    user_service = UserService()
+    user_service = UserService.create_default()
 
     full_name = None
     if contact.first_name:

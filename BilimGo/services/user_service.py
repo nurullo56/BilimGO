@@ -41,17 +41,19 @@ def format_uzbek_dt(raw_dt: str | None = None) -> str:
 class UserService:
     def __init__(
         self,
-        user_repo: UserRepository,
-        access_grant_repo: AccessGrantRepository,
-        lesson_view_repo: LessonViewRepository,
-        license_node_repo: LicenseNodeRepository,
-        mentor_app_repo: MentorApplicationRepository,
+        user_repo: UserRepository | None = None,
+        access_grant_repo: AccessGrantRepository | None = None,
+        lesson_view_repo: LessonViewRepository | None = None,
+        license_node_repo: LicenseNodeRepository | None = None,
+        mentor_app_repo: MentorApplicationRepository | None = None,
+        conn: Any = None,
     ) -> None:
-        self.user_repo = user_repo
-        self.access_grant_repo = access_grant_repo
-        self.lesson_view_repo = lesson_view_repo
-        self.license_node_repo = license_node_repo
-        self.mentor_app_repo = mentor_app_repo
+        c = conn or database.conn
+        self.user_repo = user_repo or UserRepository(c)
+        self.access_grant_repo = access_grant_repo or AccessGrantRepository(c)
+        self.lesson_view_repo = lesson_view_repo or LessonViewRepository(c)
+        self.license_node_repo = license_node_repo or LicenseNodeRepository(c)
+        self.mentor_app_repo = mentor_app_repo or MentorApplicationRepository(c)
 
     @classmethod
     def create_default(cls, conn=None) -> "UserService":
@@ -85,6 +87,12 @@ class UserService:
 
     async def update_role(self, user_id: int, role: str) -> None:
         await self.user_repo.update_role(user_id, role)
+
+    async def update_profile(
+        self, user_id: int, full_name: str | None = None, phone: str | None = None
+    ) -> None:
+        """Foydalanuvchi profilini (ism va telefon) yangilaydi."""
+        await self.user_repo.update_profile(user_id=user_id, full_name=full_name, phone=phone)
 
     async def get_full_profile(
         self,

@@ -47,7 +47,7 @@ async def _resolve_bot_username(bot: Bot) -> str:
     "👤 Profil", "Profil va sozlamalar", "Profil",
 ]))
 async def handle_profile_menu(message: Message, user: User) -> None:
-    current_user = await UserService().get_by_id(user.id) or user
+    current_user = await UserService.create_default().get_by_id(user.id) or user
 
     phone_display = current_user.phone or "Kiritilmagan"
     role_name = _ROLE_LABELS.get(current_user.role, "Talaba")
