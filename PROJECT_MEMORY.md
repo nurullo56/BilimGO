@@ -472,7 +472,7 @@ Har qanday yangi funksiya yoki endpoint quyidagi ketma-ketlikda yoziladi:
 - 📄 `RichAiContent.tsx` — AI javoblarini chiroyli formatda (Markdown, jadvallar, kod bloklari, qalin matnlar, nusxalash) render qiluvchi xavfsiz komponent.
 - 📄 `TgEmoji.tsx` — Telegram formatidagi animatsiyali stikerlar va maxsus emojilarni aniqlovchi va ko'rsatuvchi yordamchi komponent.
 - 📄 `TgEmojiPicker.tsx` — Telegram Premium uslubidagi animatsiyali emojilar tanlash popover paneli.
-- 📄 `VideoPlayerView.tsx` — Darslarni ko'rish pleyeri: video/audio/matnli darslar, vaqtni nazorat qilish, dars testi, fikr bildirish, ovozli hisobot va AI Ustoz tugmasi.
+- 📄 `VideoPlayerView.tsx` — Darslarni ko'rish pleyeri: video/audio/matnli darslar, vaqtni nazorat qilish, dars konspekti va matni, dars testi (quiz), fikr bildirish (feedback), oxirgi dars ovozli hisoboti, navigatsiya va AI Ustoz; elementlar zamonaviy LMS oqimi bo'yicha (Pleyer -> Konspekt -> Test -> Feedback -> Navigatsiya) joylashtirilgan.
 - 📄 `VoiceReportModal.tsx` — O'quvchi dars bo'yicha o'zlashtirgan bilimi haqida ovozli xabar (audio report) yozib, mentorga topshirish interaktiv modali.
 
 ---
