@@ -25,6 +25,7 @@ def get_admin_menu(webapp_url: str | None = None) -> ReplyKeyboardMarkup:
                 KeyboardButton(text="📊 Platforma statistikasi"),
             ],
             [
+                KeyboardButton(text="⚡️ Server yuki va AI tokenlar"),
                 KeyboardButton(text="⏳ Kurslar Waitlist (Navbat)"),
             ],
             [
@@ -91,6 +92,12 @@ def get_admin_panel_keyboard(webapp_url: str | None = None) -> InlineKeyboardMar
             ],
             [
                 InlineKeyboardButton(
+                    text="⚡️ Server yuki va AI tokenlar",
+                    callback_data="admin_action:infra_stats",
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="⏳ Kurslar Waitlist (Navbat)",
                     callback_data="admin_action:waitlist",
                 )
@@ -117,6 +124,30 @@ def get_admin_courses_waitlist_keyboard(courses: list) -> InlineKeyboardMarkup:
         )
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_infra_pagination_keyboard(page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """
+    Infratuzilma statistikasi uchun pagination klaviaturasi (⬅️ ❌ ➡️).
+    """
+    nav_row = []
+
+    # ⬅️ Tugmasi
+    if page > 1:
+        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"admin_infra:page:{page - 1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data="admin_infra:noop:first"))
+
+    # ❌ Tugmasi (Yopish)
+    nav_row.append(InlineKeyboardButton(text="❌", callback_data="admin_infra:close"))
+
+    # ➡️ Tugmasi
+    if page < total_pages:
+        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"admin_infra:page:{page + 1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text="➡️", callback_data="admin_infra:noop:last"))
+
+    return InlineKeyboardMarkup(inline_keyboard=[nav_row])
 
 
 ADMIN_MENU = get_admin_menu()

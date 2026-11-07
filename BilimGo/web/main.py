@@ -91,6 +91,15 @@ ASSETS_DIR = STATIC_DIR / "assets"
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
+IMAGES_DIR = STATIC_DIR / "images"
+if not IMAGES_DIR.exists():
+    candidate_img = Path(__file__).resolve().parent.parent.parent / "frontend" / "public" / "images"
+    if candidate_img.exists():
+        IMAGES_DIR = candidate_img
+
+if IMAGES_DIR.exists():
+    app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
+
 FALLBACK_STATIC = Path(__file__).resolve().parent / "static"
 if FALLBACK_STATIC.exists() and FALLBACK_STATIC != STATIC_DIR:
     app.mount("/static", StaticFiles(directory=FALLBACK_STATIC), name="static")
@@ -99,7 +108,7 @@ if FALLBACK_STATIC.exists() and FALLBACK_STATIC != STATIC_DIR:
 
 @app.get("/{full_path:path}")
 async def serve_mini_app_spa(full_path: str = ""):
-    if full_path.startswith("api/") or full_path.startswith("assets/"):
+    if full_path.startswith("api/") or full_path.startswith("assets/") or full_path.startswith("images/"):
         raise HTTPException(status_code=404, detail="Not found")
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():

@@ -309,3 +309,143 @@ class AdminRepository:
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+    async def get_mentors_infrastructure_usage_overview(self) -> dict[str, Any]:
+        """
+        Super Admin uchun barcha faol mentorlar va ularning shogirdlari kesimida:
+        - AI tyutor token sarfi (savollar, tokenlar, summa)
+        - Server yuki (video streamlar, hosting, summa)
+        - Jami infratuzilma xarajatlarini
+        hamda platforma Grand Total ko'rsatkichlarini hisoblaydi.
+        """
+        cursor_m = await self.conn.execute(
+            """
+            SELECT DISTINCT u.id as user_id, u.full_name, u.telegram_id, u.phone, u.role,
+                   ln.id as node_id, ln.stage, ln.status as node_status
+            FROM users u
+            LEFT JOIN license_nodes ln ON ln.owner_user_id = u.id
+            WHERE u.role IN ('mentor', 'super_mentor')
+               OR ln.id IS NOT NULL
+               OR u.id IN (SELECT DISTINCT mentor_id FROM ai_token_usage)
+               OR u.id IN (SELECT DISTINCT mentor_id FROM server_expense_usage)
+            ORDER BY u.id ASC
+            """
+        )
+        mentor_rows = await cursor_m.fetchall()
+
+        mentors: list[dict[str, Any]] = []
+
+        for m in mentor_rows:
+            mid = m["user_id"]
+
+            cursor_std = await self.conn.execute(
+                """
+                SELECT COUNT(DISTINCT cm.user_id) as cnt
+                FROM cabinet_members cm
+                JOIN cabinets c ON c.id = cm.cabinet_id
+                JOIN license_nodes ln ON ln.id = c.owner_node_id
+                WHERE ln.owner_user_id = ? AND cm.role_in_cabinet = 'student'
+                """,
+                (mid,),
+            )
+            r_std = await cursor_std.fetchone()
+            student_count = r_std["cnt"] if r_std else 0
+
+            cursor_ai = await self.conn.execute(
+                """
+                SELECT 
+                    COUNT(id) AS total_queries,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                    COALESCE(SUM(prompt_tokens), 0) AS total_prompt_tokens,
+                    COALESCE(SUM(completion_tokens), 0) AS total_completion_tokens,
+                    COALESCE(SUM(cost_sum), 0.0) AS total_cost_sum
+                FROM ai_token_usage
+                WHERE mentor_id = ?
+                """,
+                (mid,),
+            )
+            ai_row = await cursor_ai.fetchone()
+            ai_queries = ai_row["total_queries"] if ai_row else 0
+            ai_tokens = ai_row["total_tokens"] if ai_row else 0
+            ai_cost = float(ai_row["total_cost_sum"]) if ai_row else 0.0
+
+            cursor_srv = await self.conn.execute(
+                """
+                SELECT 
+                    COUNT(id) AS total_events,
+                    COALESCE(SUM(cost_sum), 0.0) AS total_cost_sum,
+                    COALESCE(SUM(CASE WHEN expense_type = 'video_bandwidth' THEN units_used ELSE 0 END), 0) AS total_video_views,
+                    COALESCE(SUM(CASE WHEN expense_type = 'video_bandwidth' THEN cost_sum ELSE 0 END), 0.0) AS video_bandwidth_cost,
+                    COALESCE(SUM(CASE WHEN expense_type = 'hosting_maintenance' THEN cost_sum ELSE 0 END), 0.0) AS hosting_cost
+                FROM server_expense_usage
+                WHERE mentor_id = ?
+                """,
+                (mid,),
+            )
+            srv_row = await cursor_srv.fetchone()
+            server_events = srv_row["total_events"] if srv_row else 0
+            video_views = int(srv_row["total_video_views"]) if srv_row else 0
+            server_cost = float(srv_row["total_cost_sum"]) if srv_row else 0.0
+
+            total_infra_cost = ai_cost + server_cost
+
+            mentors.append({
+                "user_id": mid,
+                "full_name": m["full_name"] or f"Mentor #{mid}",
+                "telegram_id": m["telegram_id"],
+                "phone": m["phone"] or "",
+                "node_id": m["node_id"],
+                "stage": m["stage"] or "limit",
+                "student_count": student_count,
+                "ai_queries": ai_queries,
+                "ai_tokens": ai_tokens,
+                "ai_cost": ai_cost,
+                "video_views": video_views,
+                "server_events": server_events,
+                "server_cost": server_cost,
+                "total_infra_cost": total_infra_cost,
+            })
+
+        cursor_g_ai = await self.conn.execute(
+            """
+            SELECT 
+                COUNT(id) AS total_queries,
+                COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                COALESCE(SUM(cost_sum), 0.0) AS total_cost_sum
+            FROM ai_token_usage
+            """
+        )
+        g_ai = await cursor_g_ai.fetchone()
+        grand_ai_queries = g_ai["total_queries"] if g_ai else 0
+        grand_ai_tokens = g_ai["total_tokens"] if g_ai else 0
+        grand_ai_cost = float(g_ai["total_cost_sum"]) if g_ai else 0.0
+
+        cursor_g_srv = await self.conn.execute(
+            """
+            SELECT 
+                COUNT(id) AS total_events,
+                COALESCE(SUM(cost_sum), 0.0) AS total_cost_sum,
+                COALESCE(SUM(CASE WHEN expense_type = 'video_bandwidth' THEN units_used ELSE 0 END), 0) AS total_video_views
+            FROM server_expense_usage
+            """
+        )
+        g_srv = await cursor_g_srv.fetchone()
+        grand_srv_events = g_srv["total_events"] if g_srv else 0
+        grand_video_views = int(g_srv["total_video_views"]) if g_srv else 0
+        grand_server_cost = float(g_srv["total_cost_sum"]) if g_srv else 0.0
+
+        grand_total = {
+            "total_mentors": len(mentors),
+            "ai_queries": grand_ai_queries,
+            "ai_tokens": grand_ai_tokens,
+            "ai_cost": grand_ai_cost,
+            "video_views": grand_video_views,
+            "server_events": grand_srv_events,
+            "server_cost": grand_server_cost,
+            "total_infra_cost": grand_ai_cost + grand_server_cost,
+        }
+
+        return {
+            "mentors": mentors,
+            "grand_total": grand_total,
+        }

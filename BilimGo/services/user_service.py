@@ -48,7 +48,10 @@ class UserService:
         mentor_app_repo: MentorApplicationRepository | None = None,
         conn: Any = None,
     ) -> None:
-        c = conn or database.conn
+        if not (user_repo and access_grant_repo and lesson_view_repo and license_node_repo and mentor_app_repo):
+            c = conn or database.conn
+        else:
+            c = conn
         self.user_repo = user_repo or UserRepository(c)
         self.access_grant_repo = access_grant_repo or AccessGrantRepository(c)
         self.lesson_view_repo = lesson_view_repo or LessonViewRepository(c)

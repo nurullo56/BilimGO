@@ -3,6 +3,8 @@ import { CheckCircle2, CreditCard, ShieldCheck, X, AlertCircle, Send, Sparkles }
 import { Course, CourseTariff } from '../types';
 import { initiatePurchase } from '../services/api';
 import { triggerHaptic } from '../services/telegram';
+import clickLogo from '../../images/click.png';
+import paymeLogo from '../../images/payme.png';
 
 interface PaymentModalProps {
   course: Course;
@@ -175,7 +177,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             {/* Provider selection */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-tg-text block">
-                To'lov tizimini tanlang:
+                To'lov usulini tanlang:
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {/* Click */}
@@ -185,21 +187,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     triggerHaptic('selection');
                     setProvider('click');
                   }}
-                  className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     provider === 'click'
-                      ? 'border-blue-500 bg-blue-500/10 shadow-xs ring-2 ring-blue-500/20'
+                      ? 'border-blue-600 bg-blue-500/10 shadow-xs'
                       : 'border-tg-secondary bg-tg-secondary hover:bg-tg-secondary/80'
                   }`}
                 >
-                  <div className="h-9 w-full flex items-center justify-center">
-                    <img
-                      src="/images/click.png"
-                      alt="Click"
-                      className="h-8 max-h-8 max-w-[110px] object-contain"
-                    />
+                  <div className="h-7 flex items-center justify-center">
+                    <img src={clickLogo} alt="CLICK" className="h-6 max-w-[85px] object-contain rounded-md" />
                   </div>
-                  <span className="text-[11px] font-semibold text-tg-hint">
-                    Click Up / Web
+                  <span className="text-[11px] font-medium text-tg-hint">
+                    Click Up / USSD / Web
                   </span>
                 </button>
 
@@ -210,20 +208,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     triggerHaptic('selection');
                     setProvider('payme');
                   }}
-                  className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     provider === 'payme'
-                      ? 'border-teal-500 bg-teal-500/10 shadow-xs ring-2 ring-teal-500/20'
+                      ? 'border-teal-500 bg-teal-500/10 shadow-xs'
                       : 'border-tg-secondary bg-tg-secondary hover:bg-tg-secondary/80'
                   }`}
                 >
-                  <div className="h-9 w-full flex items-center justify-center">
-                    <img
-                      src="/images/payme.png"
-                      alt="Payme"
-                      className="h-8 max-h-8 max-w-[110px] object-contain"
-                    />
+                  <div className="h-7 flex items-center justify-center">
+                    <img src={paymeLogo} alt="Payme" className="h-6 max-w-[85px] object-contain" />
                   </div>
-                  <span className="text-[11px] font-semibold text-tg-hint">
+                  <span className="text-[11px] font-medium text-tg-hint">
                     Payme Card / App
                   </span>
                 </button>

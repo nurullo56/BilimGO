@@ -301,3 +301,27 @@ class MentorService:
             return None
         await self.app_repo.submit_receipt(app.id, photo_id)
         return await self.app_repo.get_by_id(app.id)
+
+    async def get_mentors_infrastructure_usage(self) -> dict[str, Any]:
+        """
+        Super Admin uchun barcha mentorlarning AI token va server xarajatlarini
+        tartiblangan (eng ko'p yuk berganlar birinchi) shaklda qaytaradi.
+        """
+        data = await self.admin_repo.get_mentors_infrastructure_usage_overview()
+        mentors = data.get("mentors", [])
+        grand_total = data.get("grand_total", {})
+
+        # Eng ko'p resurs sarflagan mentorlarni yuqoriga qo'yish (saralash)
+        mentors.sort(
+            key=lambda x: (
+                x.get("total_infra_cost", 0.0),
+                x.get("ai_tokens", 0),
+                x.get("video_views", 0),
+            ),
+            reverse=True,
+        )
+
+        return {
+            "mentors": mentors,
+            "grand_total": grand_total,
+        }

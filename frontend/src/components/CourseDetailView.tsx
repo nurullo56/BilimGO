@@ -289,7 +289,7 @@ export const CourseDetailView: React.FC<CourseDetailViewProps> = ({
           </div>
 
           {/* Tariffs Selection (e.g. START, PRO, VIP) */}
-          {course.tariffs && course.tariffs.length > 0 && !isEnrolled && !course.is_waitlist && (
+          {course.tariffs && course.tariffs.length > 0 && !course.is_waitlist && (
             <div className="space-y-2.5 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-tg-text uppercase tracking-wider flex items-center gap-1.5">

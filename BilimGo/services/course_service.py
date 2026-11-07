@@ -186,3 +186,13 @@ class CourseService:
             "title": course.title if course else "",
             "image_url": image_url,
         }
+
+    async def set_course_description(self, course_id: int, description: Optional[str]) -> dict[str, Any]:
+        """Kursning qisqacha tavsif (description) matnini yangilaydi."""
+        await self.course_repo.update_description(course_id, description)
+        course = await self.course_repo.get_by_id(course_id)
+        return {
+            "course_id": course_id,
+            "title": course.title if course else "",
+            "description": description,
+        }

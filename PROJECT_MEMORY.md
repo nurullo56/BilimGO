@@ -330,6 +330,14 @@ Har qanday yangi funksiya yoki endpoint quyidagi ketma-ketlikda yoziladi:
 
 ---
 
+### 🌟 So'nggi Tasdiqlangan Tuzatishlar va Yangilanishlar:
+- ⚡️ `Bot Username Kesh va Tarmoq Himoyasi`: `profile.py` va `mentor/cabinet.py` fayllarida `_resolve_bot_username` joriy etildi. Har safar Telegramga ortiqcha so'rov yuborilmaydi, xotiradan 0ms da olinadi va tarmoq uzilishlarida (`WinError 64`) xatolik bermasdan zaxira nomdan foydalanadi.
+- 📩 `Sotuv Havolalarini 2 Qismga Bo'lish`: `profile.py` va `mentor/cabinet.py` da sotuv havolalari xabari qulay o'qilishi uchun 2 ta xabarga ajratildi (1-xabar: Online sotuv Click/Payme havolalari, 2-xabar: Lichkada to'laganlar uchun ochiq havolalar va umumiy kabinet taklif havolasi).
+- 👤 `UserService va Kontakt Qabuli`: `services/user_service.py` konstruktori xavfsiz holatga keltirildi va `update_profile` metodi qo'shildi; `start.py` dagi `handle_contact` da telefon raqam yuborilganda `TypeError` va `AttributeError` xatolari to'liq bartaraf etildi.
+- 💳 `Click va Payme Statik Logolari`: `web/main.py` da `/images` papkasi `StaticFiles` orqali ulandi (SPA fallback o'rniga to'g'ri PNG rasm qaytaradi), `PaymentModal.tsx` da rasm yuklanmay qolishiga qarshi avtomatik fallback qo'shildi va frontend production build qilindi.
+
+---
+
 ### 4. 🗄️ Repozitoriylar Qatlami (`BilimGo/db/repositories/`)
 
 - 📄 `access_grant_repo.py` (`AccessGrantRepository`) — Kurslar va darslarga foydalanuvchi dostup huquqlarini yaratish, tekshirish va talabaning kurslardagi progressini olish. Metodlari: `grant_course_access`, `has_active_access`, `count_active_courses`, `get_latest_active_course_title`, `count_cohort_students`, `get_user_course_enrollment_time`, `get_student_courses_with_progress`.

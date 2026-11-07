@@ -76,3 +76,11 @@ class CourseRepository(BaseRepository):
             (image_url, course_id),
         )
         await self._conn.commit()
+
+    async def update_description(self, course_id: int, description: str | None) -> None:
+        """Kursning qisqacha tavsif (description) matnini yangilaydi."""
+        await self._conn.execute(
+            "UPDATE courses SET description = ? WHERE id = ?",
+            (description, course_id),
+        )
+        await self._conn.commit()

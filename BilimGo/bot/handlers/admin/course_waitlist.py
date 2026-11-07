@@ -173,3 +173,38 @@ async def handle_set_course_image(message: Message) -> None:
     except Exception as exc:
         logger.exception("Rasm URL o'rnatishda xatolik: %s", exc)
         await message.answer(f"❌ Xatolik yuz berdi: {exc}")
+
+
+@router.message(Command("set_desc", "set_description"))
+async def handle_set_course_description(message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    if user_id not in settings.bot.admin_ids:
+        await message.answer("⚠️ Sizda ushbu amalni bajarish huquqi yo'q.")
+        return
+
+    parts = (message.text or "").split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer(
+            "ℹ️ <b>Foydalanish:</b> <code>/set_desc &lt;course_id&gt; &lt;tavsif matni&gt;</code>\n"
+            "<i>Masalan:</i> <code>/set_desc 5 1688, Taobao, zavodlardan tovar xarid qilish va kargo logistikasi kursi.</code>\n"
+            "<i>Tozalash uchun:</i> <code>/set_desc 5 none</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        course_id = int(parts[1])
+        desc_text = parts[2].strip()
+        if desc_text.lower() in ("none", "clear", "o'chirish", "ochirish"):
+            desc_text = ""
+
+        service = CourseService()
+        result = await service.set_course_description(course_id, desc_text)
+        await message.answer(
+            f"✅ <b>{result['title']}</b> kursi uchun tavsif matni yangilandi:\n\n"
+            f"📝 <i>{desc_text or '(Tozalandi)'}</i>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.exception("Tavsif matnini o'rnatishda xatolik: %s", exc)
+        await message.answer(f"❌ Xatolik yuz berdi: {exc}")
