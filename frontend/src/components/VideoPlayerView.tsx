@@ -64,7 +64,6 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const [lessonImages, setLessonImages] = useState<string[]>([]);
   const [activeImageIdx, setActiveImageIdx] = useState<number>(0);
   const [isAudio, setIsAudio] = useState(false);
-  const [forceMode, setForceMode] = useState<'auto' | 'video' | 'audio'>('auto');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -280,7 +279,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
   const nextLesson = currentIndex !== -1 && currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
   const isLastLesson = lessons.length > 0 && (currentIndex === lessons.length - 1 || !nextLesson);
 
-  const activeIsAudio = forceMode === 'audio' ? true : forceMode === 'video' ? false : isAudio;
+  const activeIsAudio = isAudio;
 
   return (
     <div className="space-y-3.5 pb-28 max-w-3xl mx-auto px-4 pt-1 animate-in fade-in duration-200">
@@ -364,55 +363,7 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
         </div>
       )}
 
-      {/* Navigation & Mode Selector Bar */}
-      <div className="flex items-center justify-between px-1">
-        <button
-          onClick={() => onNavigate({ type: 'course', courseId })}
-          className="flex items-center gap-1.5 text-xs font-semibold text-tg-hint hover:text-tg-text transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kursga qaytish</span>
-        </button>
 
-        {/* Video / Audio Mode Toggle */}
-        {!isTextLesson ? (
-          <div className="flex items-center bg-tg-secondary p-0.5 rounded-xl border border-tg-secondary">
-            <button
-              onClick={() => {
-                triggerHaptic('selection');
-                setForceMode('video');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                !activeIsAudio
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-tg-hint hover:text-tg-text'
-              }`}
-            >
-              <VideoIcon className="w-3.5 h-3.5" />
-              <span>Video</span>
-            </button>
-            <button
-              onClick={() => {
-                triggerHaptic('selection');
-                setForceMode('audio');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeIsAudio
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-tg-hint hover:text-tg-text'
-              }`}
-            >
-              <Headphones className="w-3.5 h-3.5" />
-              <span>Ovozli</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-500/20">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Matnli dars</span>
-          </div>
-        )}
-      </div>
 
       {/* Player Stage */}
       <div className="relative w-full rounded-[28px] overflow-hidden shadow-2xl border border-blue-900/30 flex items-center justify-center bg-gradient-to-b from-[#0e1626] to-[#080d1a]">
@@ -555,9 +506,6 @@ export const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({
                   <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400 block">
                     OVOZLI DARS & INFOGRAFIKA
                   </span>
-                  <h3 className="text-sm sm:text-base font-bold text-white truncate">
-                    <TgText>{currentLesson?.title}</TgText>
-                  </h3>
                 </div>
               </div>
 
