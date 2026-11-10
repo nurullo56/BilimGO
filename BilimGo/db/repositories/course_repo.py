@@ -20,6 +20,7 @@ class Course:
     image_url: str | None = None
     notice_text: str | None = None
     syllabus: str | None = None
+    instructor: str | None = None
 
     @classmethod
     def from_row(cls, row: aiosqlite.Row) -> Course:
@@ -35,6 +36,7 @@ class Course:
             image_url=row["image_url"] if "image_url" in row.keys() else None,
             notice_text=row["notice_text"] if "notice_text" in row.keys() else None,
             syllabus=row["syllabus"] if "syllabus" in row.keys() else None,
+            instructor=row["instructor"] if "instructor" in row.keys() else None,
         )
 
 

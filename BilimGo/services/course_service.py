@@ -77,6 +77,7 @@ class CourseService:
             "image_url": course.image_url,
             "notice_text": course.notice_text,
             "syllabus": course.syllabus,
+            "instructor": course.instructor,
         }
         d["tariffs"] = await self.tariff_repo.get_by_course_id(course_id)
         return d

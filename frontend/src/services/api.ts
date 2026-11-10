@@ -80,7 +80,14 @@ export function enhanceCourse(c: any): Course {
   
   let category = c.category;
   let thumbnail = c.image_url || c.thumbnail;
-  let instructor = c.instructor || 'Nurulloh Habibullayev (Bosh Mentor)';
+  let instructor = c.instructor;
+  if (!instructor) {
+    if (t.includes('xitoy') || t.includes('chinaseller') || idNum === 5) {
+      instructor = "Sayyora (Safinzadas) - Xitoy bo'yicha ekspert (Bosh Mentor)";
+    } else {
+      instructor = 'Nurulloh Habibullayev (Bosh Mentor)';
+    }
+  }
 
   if (!category) {
     if (t.includes('logist')) category = 'Logistika & Dispetcherlik';
